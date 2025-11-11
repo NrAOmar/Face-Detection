@@ -83,6 +83,5 @@ def detect_faces(frame, out):
         2                               # Thickness
     )
 
-
     out.write(frame)
     return frame
