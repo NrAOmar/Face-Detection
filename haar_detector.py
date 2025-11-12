@@ -9,7 +9,7 @@ cv2.namedWindow('Camera (Haar)', cv2.WINDOW_NORMAL)
 # cv2.resizeWindow('Camera (Haar)', 400, 450)
 cv2.moveWindow('Camera (Haar)', 640, 0)
 
-def detect_faces(frame, out):
+def detect_faces(frame, out = ""):
     frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     faces = face_classifier.detectMultiScale(
@@ -31,5 +31,6 @@ def detect_faces(frame, out):
     )
 
     # Write the frame into the file 'output.mp4'
-    out.write(frame)
+    if out != "":
+        out.write(frame)
     return frame

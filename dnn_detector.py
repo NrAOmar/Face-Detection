@@ -40,7 +40,7 @@ cv2.namedWindow('Camera (DNN)', cv2.WINDOW_NORMAL)
 cv2.moveWindow('Camera (DNN)', 0, 0)
 
 
-def detect_faces(frame, out):
+def detect_faces(frame, out = ""):
     (h, w) = frame.shape[:2]
 
     # Prepare blob for the DNN
@@ -83,5 +83,7 @@ def detect_faces(frame, out):
         2                               # Thickness
     )
 
-    out.write(frame)
+    # Write the frame into the file 'output.mp4'
+    if out != "":
+        out.write(frame)
     return frame
