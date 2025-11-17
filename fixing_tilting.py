@@ -4,7 +4,7 @@ import haar_detector
 import dnn_detector
 import helpers
 
-imagePath = 'CRV_Face_Detection/input_image.jpg'
+imagePath = 'input_image.jpg'
 
 img = cv2.imread(imagePath)
 
