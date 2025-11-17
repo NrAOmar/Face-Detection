@@ -1,14 +1,14 @@
 import cv2
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import haar_detector
 import dnn_detector
 import helpers
 
-imagePath = 'input_image.jpg'
+imagePath = 'CRV_Face_Detection/input_image.jpg'
 
 img = cv2.imread(imagePath)
 
-rotated = helpers.rotate_image_without_cropping(img, 20)
+rotated = helpers.rotate_image_without_cropping(img.copy(), 20)
 
 img_rgb_haar = haar_detector.detect_faces(rotated.copy())
 img_rgb_dnn = dnn_detector.detect_faces(rotated.copy())
