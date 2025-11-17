@@ -2,6 +2,7 @@ import cv2
 import haar_detector
 import dnn_detector
 import helpers
+import math
 
 camera_in_use = 2 # start with camera in the lab
 
@@ -45,24 +46,34 @@ print("Recording... Press 'q' to stop.")
 while True:
     ret, frame = cap.read()
     if not ret:
-        print("Failed to grab frame.")
         break
 
-#Haar
-    frame_haar = haar_detector.detect_faces(frame.copy(), out_haar)
-    # Show the frame
-    display_frame_haar = cv2.resize(frame_haar, (0, 0), fx=scale, fy=scale)
-    cv2.imshow('Camera (Haar)', display_frame_haar)
+    detections = helpers.detect_faces_multi_rotation_mapped(frame, haar_detector.face_classifier, step=90)
 
-#DNN
-    frame_dnn = dnn_detector.detect_faces(frame.copy(), out_dnn)
-    # Show the frame
-    display_frame_dnn = cv2.resize(frame_dnn, (0, 0), fx=scale, fy=scale)
-    cv2.imshow('Camera (DNN)', display_frame_dnn)
+    display = frame.copy()
 
-    # Wait for close
+    for (bbox, angle) in detections:
+        x, y, w, h = bbox
+        # optionally check bounds/clamp to image size
+        x = max(0, min(x, frame.shape[1]-1))
+        y = max(0, min(y, frame.shape[0]-1))
+        w = max(1, min(w, frame.shape[1]-x))
+        h = max(1, min(h, frame.shape[0]-y))
+
+        cv2.rectangle(display, (x, y), (x+w, y+h), (0, 255, 0), 2)
+        cv2.putText(display, f"{angle}°", (x, max(0, y-8)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 1)
+
+    total = len(detections)
+    cv2.putText(display, f"Total faces (all angles): {total}", (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
+
+    show = cv2.resize(display, (0,0), fx=0.6, fy=0.6)
+    cv2.imshow("Multi-Rotation Detection (mapped)", show)
+
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
+
 
 cap.release()
 out_dnn.release()

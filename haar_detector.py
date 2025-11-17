@@ -33,4 +33,4 @@ def detect_faces(frame, out = ""):
     # Write the frame into the file 'output.mp4'
     if out != "":
         out.write(frame)
-    return frame
+    return faces, frame
