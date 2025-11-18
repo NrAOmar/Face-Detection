@@ -5,3 +5,4 @@ matplotlib
 notebook
 jupyter
 ipympl
+numba
