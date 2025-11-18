@@ -6,7 +6,11 @@
     - ✅ get the conrer points of the box
     - ✅ map this center point using the inverse rotation matrix
     - ✅ draw the new box
-    -  ❌ combine all boxes
+    - ❌ Combine all boxes
+    - ❌ Use GPU for using multiple cores to process single frame 
+    - ❌ Use image without cropping. 
+
+
 - add low pass filter for faces
     - will introduce a delay when detecting faces
 - call ahmed and ask about biometrics
