@@ -24,13 +24,12 @@ def rotate_image(img, angle, scale = 1.0):
     (h, w) = img.shape[:2]
     center = (w // 2, h // 2)
 
-    rotation_matrix = cv2.getRotationMatrix2D(center, angle, scale)
-    rotated = cv2.warpAffine(img, rotation_matrix, (w, h))
-    # rotated = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
-    return rotated, rotation_matrix
+    rot_mat = cv2.getRotationMatrix2D(center, angle, scale)
+    
+    rotated_img = cv2.warpAffine(img, rot_mat, (w, h))
+    return rotated_img, rot_mat
 
 def rotate_points_back(points, M):
-    """Rotate corner points back using the inverse rotation matrix."""
     M_inv = cv2.invertAffineTransform(M)
     ones = np.ones((points.shape[0], 1))
     pts_homo = np.hstack([points, ones])

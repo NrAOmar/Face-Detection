@@ -91,6 +91,12 @@ while not flag_quit:
             display_frame_dnn = cv2.resize(frame_dnn, (0, 0), fx=scale, fy=scale)
             cv2.imshow('Camera (DNN)', display_frame_dnn)
 
+            if (angle == 360 - angle_step):
+                boxes2 = helpers.construct_boxes(faces)
+                frame_rotated2 = helpers.add_boxes(frame_rotated.copy(), boxes2, angle % 360)
+                display_frame_haar_rotated = cv2.resize(frame_rotated2, (0, 0), fx=scale, fy=scale)
+                cv2.imshow('Camera (Rotated)', display_frame_haar_rotated)
+
         angle += angle_step
         if cv2.waitKey(1) & 0xFF == ord('q'):
             flag_quit = True
