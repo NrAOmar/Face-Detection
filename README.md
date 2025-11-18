@@ -1,6 +1,9 @@
 # CRV_Face_Detection
 
 ## TODO
+- fix writing to .mp4 file
+- add low pass filter for faces
+    - will introduce a delay when detecting faces
 - add tilting
     - ✅ rotate 15 degree => 24 images per frame
     - ✅ get the conrer points of the box
@@ -10,9 +13,6 @@
     - ❌ Use GPU for using multiple cores to process single frame 
     - ❌ Use image without cropping. 
 
-
-- add low pass filter for faces
-    - will introduce a delay when detecting faces
 - call ahmed and ask about biometrics
 - fuse both algorithms for faraway faces
 
