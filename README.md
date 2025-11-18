@@ -2,6 +2,7 @@
 
 ## TODO
 - add plotting function that plots in a grid
+- use 2 cameras together
 - add flags that allow us to disable all of these features/improvements like the prof
     - flag for tilting
     - flag for which model to use HAAR/DNN/BOTH and the fusion
@@ -17,7 +18,7 @@
     - ✅ draw the new box
     - ❌ Combine all boxes
     - ❌ Use GPU for using multiple cores to process single frame 
-    - ❌ Use image without cropping. 
+    - ❌ Use image without cropping
 
 - call ahmed and ask about biometrics
 - fuse both algorithms for faraway faces

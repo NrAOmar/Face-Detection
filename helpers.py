@@ -136,8 +136,9 @@ def detect_faces_multi_rotation_mapped(frame, detector, step=10):
 
 
 # ========================================
-def add_boxes(frame, boxes, angle):
+def add_boxes(frame_original, boxes, angle):
     # draw all boxes on original frame
+    frame = frame_original.copy()
     for (xmin, ymin, xmax, ymax) in boxes:
         cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
         cv2.putText(frame, f"{angle}°", (xmin, max(0, ymin-8)),
