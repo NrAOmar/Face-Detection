@@ -17,8 +17,9 @@
     - ✅ map this center point using the inverse rotation matrix
     - ✅ draw the new box
     - ❌ Combine all boxes
+    - ❌ Fix the problem with the pixelated image
     - ❌ Use GPU for using multiple cores to process single frame 
-    - ❌ Use image without cropping
+    - ✅ Use image without cropping. 
 
 - call ahmed and ask about biometrics
 - fuse both algorithms for faraway faces

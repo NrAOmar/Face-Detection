@@ -65,7 +65,7 @@ while not flag_quit:
         if not ret:
             break
 
-        frame_rotated, rotation_matrix = helpers.rotate_image(frame_original.copy(), angle)
+        frame_rotated, rotation_matrix = helpers.rotate_image_without_cropping(frame_original.copy(), angle)
         
         # HAAR
         if flag_haar:

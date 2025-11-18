@@ -41,7 +41,7 @@ def rotate_points_back(points, M):
 
 
 
-def rotate_image_without_cropping(img, angle = 90, scale = 1.0):
+def rotate_image_without_cropping(img, angle, scale = 1.0):
     (h, w) = img.shape[:2]
     center = (w // 2, h // 2)
 
