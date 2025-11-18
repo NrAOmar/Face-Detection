@@ -77,22 +77,22 @@ def detect_faces(frame, out = ""):
             face_list.append((x1, y1, width, height))
 
 
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 3)
-            cv2.putText(frame, f"{conf:.2f}", (x1, max(0, y1 - 7)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            # cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 3)
+            # cv2.putText(frame, f"{conf:.2f}", (x1, max(0, y1 - 7)),
+            #             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
     
-    # Display number of faces
-    cv2.putText(
-        frame,                          # Image
-        f"Faces: {faces}",              # Text
-        (10, 30),                       # Position (x, y)
-        cv2.FONT_HERSHEY_SIMPLEX,       # Font
-        1,                              # Font scale
-        (0, 0, 255),                    # Color (B,G,R) → red
-        2                               # Thickness
-    )
+    # # Display number of faces
+    # cv2.putText(
+    #     frame,                          # Image
+    #     f"Faces: {faces}",              # Text
+    #     (10, 30),                       # Position (x, y)
+    #     cv2.FONT_HERSHEY_SIMPLEX,       # Font
+    #     1,                              # Font scale
+    #     (0, 0, 255),                    # Color (B,G,R) → red
+    #     2                               # Thickness
+    # )
 
     # Write the frame into the file 'output.mp4'
-    if out != "":
-        out.write(frame)
-    return frame, face_list
+    # if out != "":
+    #     out.write(frame)
+    return face_list

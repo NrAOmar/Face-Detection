@@ -44,8 +44,6 @@ angle_step = 45
 display_frame_haar = ""
 break_flag = False
 while not break_flag:
-
-    # # Capture frame
     # frame_haar = frame.copy()
     # frame_dnn = frame.copy()
     
@@ -56,30 +54,31 @@ while not break_flag:
         ret, frame = cap.read()
         if not ret:
             break
+
         frame_rotated, rotation_matrix = helpers.rotate_image(frame.copy(), angle)
         
         # HAAR
-        #faces = haar_detector.detect_faces(frame_rotated.copy())
+        faces = haar_detector.detect_faces(frame_rotated.copy())
     
-        #boxes = helpers.construct_boxes(faces, rotation_matrix)
-        #for box in boxes:
-          #  boxes_total.append(box)
-        #frame_haar = helpers.add_boxes(frame.copy(), boxes_total, angle % 360)
-
-        ## Show the frame
-        #display_frame_haar = cv2.resize(frame_haar, (0, 0), fx=scale, fy=scale)
-        #cv2.imshow('Camera (Haar)', display_frame_haar)
-        
-
-        frame,faces = dnn_detector.detect_faces(frame)
         boxes = helpers.construct_boxes(faces, rotation_matrix)
         for box in boxes:
-            boxes_total.append(box)
-        frame_dnn = helpers.add_boxes(frame.copy(), boxes_total, angle % 360)
+           boxes_total.append(box)
+        frame_haar = helpers.add_boxes(frame.copy(), boxes_total, angle % 360)
 
-        ## Show the frame
-        display_frame_dnn = cv2.resize(frame_dnn, (0, 0), fx=scale, fy=scale)
-        cv2.imshow('Camera (dnn)', display_frame_dnn)
+        # Show the frame
+        display_frame_haar = cv2.resize(frame_haar, (0, 0), fx=scale, fy=scale)
+        cv2.imshow('Camera (Haar)', display_frame_haar)
+        
+        # DNN
+        # faces = dnn_detector.detect_faces(frame_rotated.copy())
+        # boxes = helpers.construct_boxes(faces, rotation_matrix)
+        # for box in boxes:
+        #     boxes_total.append(box)
+        # frame_dnn = helpers.add_boxes(frame.copy(), boxes_total, angle % 360)
+
+        # ## Show the frame
+        # display_frame_dnn = cv2.resize(frame_dnn, (0, 0), fx=scale, fy=scale)
+        # cv2.imshow('Camera (dnn)', display_frame_dnn)
         
         # debugging
         # if (angle == 280):
@@ -89,22 +88,13 @@ while not break_flag:
             # cv2.imshow('Camera (Rotated)', display_frame_haar_rotated)
         # if (angle == 360):
             ## Store the frames
-        if out_haar != "":
-            out_haar.write(display_frame_dnn)
-        else:
-            print("no haar frame found")
+        # if out_haar != "":
+        #     out_haar.write(display_frame_dnn)
+        # else:
+        #     print("no haar frame found")
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break_flag = True
-        
-
-
-        # DNN
-        # frame_dnn = dnn_detector.detect_faces(frame_rotated.copy(), out_dnn)
-        
-        # ## Show the frame
-        # display_frame_dnn = cv2.resize(frame_dnn, (0, 0), fx=scale, fy=scale)
-        # cv2.imshow('Camera (DNN)', display_frame_dnn)
         
         angle += angle_step
 
