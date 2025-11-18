@@ -20,7 +20,7 @@ def get_frame_size(camera_in_use):
 # frame_dnn_width  = int(cap.get(cv2.CAP_PROP_frame_dnn_WIDTH))
 # frame_dnn_height = int(cap.get(cv2.CAP_PROP_frame_dnn_HEIGHT))
 
-def rotate_image(img, angle = 90, scale = 1.0):
+def rotate_image(img, angle, scale = 1.0):
     (h, w) = img.shape[:2]
     center = (w // 2, h // 2)
 
@@ -128,3 +128,45 @@ def detect_faces_multi_rotation_mapped(frame, detector, step=10):
             mapped_detections.append((mapped_box, angle))
 
     return mapped_detections
+
+
+
+
+
+
+
+# ========================================
+def add_boxes(frame, boxes, angle):
+    # draw all boxes on original frame
+    for (xmin, ymin, xmax, ymax) in boxes:
+        cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+        cv2.putText(frame, f"{angle}°", (xmin, max(0, ymin-8)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 1)
+
+    cv2.putText(frame, f"Faces: {len(boxes)}", (10,30),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
+    return frame
+
+def construct_boxes(faces, rot_mat=np.eye(3)[:-1]):
+    boxes = []
+    for (x, y, w, h) in faces:
+        # corners in rotated frame
+        corners = np.array([
+            [x  , y  ],
+            [x+w, y  ],
+            [x  , y+h],
+            [x+w, y+h],
+        ], dtype=np.float32)
+
+        # rotate corners back
+        unrot_corners = rotate_points_back(corners, rot_mat)
+
+        # fit axis-aligned box
+        xmin = int(unrot_corners[:,0].min())
+        ymin = int(unrot_corners[:,1].min())
+        xmax = int(unrot_corners[:,0].max())
+        ymax = int(unrot_corners[:,1].max())
+
+        boxes.append((xmin, ymin, xmax, ymax))
+
+    return boxes

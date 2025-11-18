@@ -19,9 +19,6 @@ if not cap.isOpened():
 # Get frame_dnn size
 scale, frame_width, frame_height = helpers.get_frame_size(camera_in_use)
 
-print(f"frame_width {frame_width}")
-print(f"frame_height {frame_height}")
-
 fps = cap.get(cv2.CAP_PROP_FPS)
 if fps == 0 or fps is None:
     fps = 20.0  # safe fallback
@@ -43,37 +40,66 @@ out_dnn = cv2.VideoWriter(
 
 print("Recording... Press 'q' to stop.")
 
+angle_step = 20
+display_frame_haar = ""
 while True:
-    ret, frame = cap.read()
-    if not ret:
-        break
 
-    detections = helpers.detect_faces_multi_rotation_mapped(frame, haar_detector.face_classifier, step=90)
+    # # Capture frame
+    # frame_haar = frame.copy()
+    # frame_dnn = frame.copy()
+    
+    angle = angle_step
+    while angle <= 360:
+        # Capture frame
+        ret, frame = cap.read()
+        if not ret:
+            break
+        frame_rotated, rotation_matrix = helpers.rotate_image(frame.copy(), angle)
+        
+        # HAAR
+        faces = haar_detector.detect_faces(frame_rotated.copy())
+        boxes = helpers.construct_boxes(faces, rotation_matrix)
+        frame_haar = helpers.add_boxes(frame.copy(), boxes, angle % 360)
 
-    display = frame.copy()
+        ## Show the frame
+        display_frame_haar = cv2.resize(frame_haar, (0, 0), fx=scale, fy=scale)
+        cv2.imshow('Camera (Haar)', display_frame_haar)
+        
+        # debugging
+        # if (angle == 280):
+            # boxes2 = helpers.construct_boxes(faces)
+            # frame_rotated2 = helpers.add_boxes(frame_rotated.copy(), boxes2, angle % 360)
+            # display_frame_haar_rotated = cv2.resize(frame_rotated2, (0, 0), fx=scale, fy=scale)
+            # cv2.imshow('Camera (Rotated)', display_frame_haar_rotated)
 
-    for (bbox, angle) in detections:
-        x, y, w, h = bbox
-        # optionally check bounds/clamp to image size
-        x = max(0, min(x, frame.shape[1]-1))
-        y = max(0, min(y, frame.shape[0]-1))
-        w = max(1, min(w, frame.shape[1]-x))
-        h = max(1, min(h, frame.shape[0]-y))
 
-        cv2.rectangle(display, (x, y), (x+w, y+h), (0, 255, 0), 2)
-        cv2.putText(display, f"{angle}°", (x, max(0, y-8)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 1)
+        # if (angle == 360):
+            ## Store the frames
+        if out_haar != "":
+            out_haar.write(display_frame_haar)
+        else:
+            print("no haar frame found")
 
-    total = len(detections)
-    cv2.putText(display, f"Total faces (all angles): {total}", (10, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
+        # DNN
+        # frame_dnn = dnn_detector.detect_faces(frame_rotated.copy(), out_dnn)
+        
+        # ## Show the frame
+        # display_frame_dnn = cv2.resize(frame_dnn, (0, 0), fx=scale, fy=scale)
+        # cv2.imshow('Camera (DNN)', display_frame_dnn)
+        
+        angle += angle_step
 
-    show = cv2.resize(display, (0,0), fx=0.6, fy=0.6)
-    cv2.imshow("Multi-Rotation Detection (mapped)", show)
+    # ## Store the frames
+    # if out_haar != "":
+    #     out_haar.write(display_frame_haar)
+    # else:
+    #     print("no haar frame found")
 
+    # if out_dnn != "":
+    #     out_dnn.write(display_frame_dnn)
+    
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
-
 
 cap.release()
 out_dnn.release()
