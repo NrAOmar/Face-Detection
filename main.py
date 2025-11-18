@@ -28,28 +28,30 @@ print(f"Recording at {fps} FPS")
 out_haar = cv2.VideoWriter(
     'output_haar.mp4',
     cv2.VideoWriter_fourcc(*'mp4v'),
-    fps,
+    fps/8,
     (frame_width, frame_height)
 )
 out_dnn = cv2.VideoWriter(
     'output_dnn.mp4',
     cv2.VideoWriter_fourcc(*'mp4v'),
-    fps,
+    fps/8,
     (frame_width, frame_height)
 )
 
 print("Recording... Press 'q' to stop.")
 
-angle_step = 20
+angle_step = 45
 display_frame_haar = ""
-while True:
+break_flag = False
+while not break_flag:
 
     # # Capture frame
     # frame_haar = frame.copy()
     # frame_dnn = frame.copy()
     
-    angle = angle_step
-    while angle <= 360:
+    angle = 0
+    boxes_total = []
+    while angle < 360:
         # Capture frame
         ret, frame = cap.read()
         if not ret:
@@ -59,7 +61,9 @@ while True:
         # HAAR
         faces = haar_detector.detect_faces(frame_rotated.copy())
         boxes = helpers.construct_boxes(faces, rotation_matrix)
-        frame_haar = helpers.add_boxes(frame.copy(), boxes, angle % 360)
+        for box in boxes:
+            boxes_total.append(box)
+        frame_haar = helpers.add_boxes(frame.copy(), boxes_total, angle % 360)
 
         ## Show the frame
         display_frame_haar = cv2.resize(frame_haar, (0, 0), fx=scale, fy=scale)
@@ -71,14 +75,17 @@ while True:
             # frame_rotated2 = helpers.add_boxes(frame_rotated.copy(), boxes2, angle % 360)
             # display_frame_haar_rotated = cv2.resize(frame_rotated2, (0, 0), fx=scale, fy=scale)
             # cv2.imshow('Camera (Rotated)', display_frame_haar_rotated)
-
-
         # if (angle == 360):
             ## Store the frames
         if out_haar != "":
             out_haar.write(display_frame_haar)
         else:
             print("no haar frame found")
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break_flag = True
+        
+
 
         # DNN
         # frame_dnn = dnn_detector.detect_faces(frame_rotated.copy(), out_dnn)
@@ -98,8 +105,6 @@ while True:
     # if out_dnn != "":
     #     out_dnn.write(display_frame_dnn)
     
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
 
 cap.release()
 out_dnn.release()
