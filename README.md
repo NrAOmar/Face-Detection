@@ -1,6 +1,12 @@
 # CRV_Face_Detection
 
 ## TODO
+- add plotting function that plots in a grid
+- add flags that allow us to disable all of these features/improvements like the prof
+    - flag for tilting
+    - flag for which model to use HAAR/DNN/BOTH and the fusion
+    - flag for *"low pass filter"*
+    - flag for biometric
 - fix writing to .mp4 file
 - add low pass filter for faces
     - will introduce a delay when detecting faces

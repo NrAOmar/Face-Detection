@@ -76,37 +76,10 @@ while not break_flag:
         #     boxes_total.append(box)
         # frame_dnn = helpers.add_boxes(frame.copy(), boxes_total, angle % 360)
 
-        # ## Show the frame
-        # display_frame_dnn = cv2.resize(frame_dnn, (0, 0), fx=scale, fy=scale)
-        # cv2.imshow('Camera (dnn)', display_frame_dnn)
-        
-        # debugging
-        # if (angle == 280):
-            # boxes2 = helpers.construct_boxes(faces)
-            # frame_rotated2 = helpers.add_boxes(frame_rotated.copy(), boxes2, angle % 360)
-            # display_frame_haar_rotated = cv2.resize(frame_rotated2, (0, 0), fx=scale, fy=scale)
-            # cv2.imshow('Camera (Rotated)', display_frame_haar_rotated)
-        # if (angle == 360):
-            ## Store the frames
-        # if out_haar != "":
-        #     out_haar.write(display_frame_dnn)
-        # else:
-        #     print("no haar frame found")
-
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break_flag = True
         
         angle += angle_step
-
-    # ## Store the frames
-    # if out_haar != "":
-    #     out_haar.write(display_frame_haar)
-    # else:
-    #     print("no haar frame found")
-
-    # if out_dnn != "":
-    #     out_dnn.write(display_frame_dnn)
-    
 
 cap.release()
 out_dnn.release()
