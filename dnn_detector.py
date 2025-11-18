@@ -52,6 +52,7 @@ def detect_faces(frame, out = ""):
     )
     net.setInput(blob)
     detections = net.forward()
+    face_list = []    # to store all faces detected by the DNN
 
     faces = 0
     # Draw detections
@@ -67,6 +68,14 @@ def detect_faces(frame, out = ""):
             y1 = max(0, min(y1, h - 1))
             x2 = max(0, min(x2, w - 1))
             y2 = max(0, min(y2, h - 1))
+
+            # Compute width & height
+            width  = x2 - x1
+            height = y2 - y1
+ 
+            # Store 
+            face_list.append((x1, y1, width, height))
+
 
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 3)
             cv2.putText(frame, f"{conf:.2f}", (x1, max(0, y1 - 7)),
@@ -86,4 +95,4 @@ def detect_faces(frame, out = ""):
     # Write the frame into the file 'output.mp4'
     if out != "":
         out.write(frame)
-    return frame
+    return frame, face_list

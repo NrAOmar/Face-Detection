@@ -7,10 +7,10 @@ import math
 camera_in_use = 2 # start with camera in the lab
 
 # Open camera (macOS AVFoundation). Try 2 then 1 then 0.
-cap = cv2.VideoCapture(camera_in_use, cv2.CAP_AVFOUNDATION)
+cap = cv2.VideoCapture(camera_in_use)
 while not cap.isOpened() and camera_in_use > 0:
     camera_in_use -= 1
-    cap = cv2.VideoCapture(camera_in_use, cv2.CAP_AVFOUNDATION)
+    cap = cv2.VideoCapture(camera_in_use)
 
 if not cap.isOpened():
     print("Error: Could not open camera.")
@@ -59,15 +59,27 @@ while not break_flag:
         frame_rotated, rotation_matrix = helpers.rotate_image(frame.copy(), angle)
         
         # HAAR
-        faces = haar_detector.detect_faces(frame_rotated.copy())
+        #faces = haar_detector.detect_faces(frame_rotated.copy())
+    
+        #boxes = helpers.construct_boxes(faces, rotation_matrix)
+        #for box in boxes:
+          #  boxes_total.append(box)
+        #frame_haar = helpers.add_boxes(frame.copy(), boxes_total, angle % 360)
+
+        ## Show the frame
+        #display_frame_haar = cv2.resize(frame_haar, (0, 0), fx=scale, fy=scale)
+        #cv2.imshow('Camera (Haar)', display_frame_haar)
+        
+
+        frame,faces = dnn_detector.detect_faces(frame)
         boxes = helpers.construct_boxes(faces, rotation_matrix)
         for box in boxes:
             boxes_total.append(box)
-        frame_haar = helpers.add_boxes(frame.copy(), boxes_total, angle % 360)
+        frame_dnn = helpers.add_boxes(frame.copy(), boxes_total, angle % 360)
 
         ## Show the frame
-        display_frame_haar = cv2.resize(frame_haar, (0, 0), fx=scale, fy=scale)
-        cv2.imshow('Camera (Haar)', display_frame_haar)
+        display_frame_dnn = cv2.resize(frame_dnn, (0, 0), fx=scale, fy=scale)
+        cv2.imshow('Camera (dnn)', display_frame_dnn)
         
         # debugging
         # if (angle == 280):
@@ -78,7 +90,7 @@ while not break_flag:
         # if (angle == 360):
             ## Store the frames
         if out_haar != "":
-            out_haar.write(display_frame_haar)
+            out_haar.write(display_frame_dnn)
         else:
             print("no haar frame found")
 
