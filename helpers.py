@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 
+
 def get_frame_size(camera_in_use):
     # iPhone Camera
     scale = 0.3
