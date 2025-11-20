@@ -56,7 +56,7 @@ if not flag_rotation:
 # display_frame_haar = ""
 flag_quit = False
 
-@njit(parallel=True)
+# @njit(parallel=True)
 def haar_parallel(frame_original, angle):
     frame_rotated, rotation_matrix = helpers.rotate_image_without_cropping(frame_original, angle)
     
@@ -65,11 +65,11 @@ def haar_parallel(frame_original, angle):
     
     return boxes
 
-@njit(parallel=True)
+# @njit(parallel=True)
 def dnn_parallel(frame_original, angle):
     frame_rotated, rotation_matrix = helpers.rotate_image_without_cropping(frame_original, angle)
     
-    faces = haar_detector.detect_faces(frame_rotated)
+    faces = dnn_detector.detect_faces(frame_rotated)
     boxes = helpers.construct_boxes(faces, rotation_matrix)
     
     return boxes
@@ -102,18 +102,21 @@ while not flag_quit:
         # future_haar.append(executor.submit(haar_parallel, frame_original, angle))
         # future_haar.append(executor.submit(haar_parallel, frame_original, angle))
     
-    b0 = executor.submit(haar_parallel, frame_original, angle)
-    b1 = executor.submit(haar_parallel, frame_original, angle)
-    b2 = executor.submit(haar_parallel, frame_original, angle)
+    haar_futures = [
+        executor.submit(haar_parallel, frame_original.copy(), angle),
+        executor.submit(haar_parallel, frame_original.copy(), angle),
+        executor.submit(haar_parallel, frame_original.copy(), angle)
+    ]
     # if flag_dnn:
         # future_dnn.append(executor.submit(dnn_parallel, frame_original, angle))
         # future_dnn.append(executor.submit(dnn_parallel, frame_original, angle))
         # future_dnn.append(executor.submit(dnn_parallel, frame_original, angle))
         
-    b3 = executor.submit(dnn_parallel, frame_original, angle)
-    b4 = executor.submit(dnn_parallel, frame_original, angle)
-    b5 = executor.submit(dnn_parallel, frame_original, angle)
-
+    dnn_futures = [
+        executor.submit(dnn_parallel, frame_original.copy(), angle),
+        executor.submit(dnn_parallel, frame_original.copy(), angle),
+        executor.submit(dnn_parallel, frame_original.copy(), angle)
+    ]
     # # Trial 1
     # for b in future_haar:
     #     boxes_haar.append(b.result())
@@ -136,21 +139,30 @@ while not flag_quit:
     # b5 = future_dnn[0].result()
 
     # # Trial 4
-    box0 = b0.result()
-    box1 = b1.result()
-    box2 = b2.result()
-    box3 = b3.result()
-    box4 = b4.result()
-    box5 = b5.result()
+    # box0 = b0.result()
+    # box1 = b1.result()
+    # box2 = b2.result()
+    # box3 = b3.result()
+    # box4 = b4.result()
+    # box5 = b5.result()
 
-    boxes_haar.append(box0)
-    boxes_haar.append(box1)
-    boxes_haar.append(box2)
-    boxes_dnn.append(box3)
-    boxes_dnn.append(box4)
-    boxes_dnn.append(box5)
+    # boxes_haar.append(box0)
+    # boxes_haar.append(box1)
+    # boxes_haar.append(box2)
+    # boxes_dnn.append(box3)
+    # boxes_dnn.append(box4)
+    # boxes_dnn.append(box5)
 
-    print(box1)
+    # # Trial t
+    # Flatten Haar
+    boxes_haar_raw = [f.result() for f in haar_futures]
+    boxes_haar = [box for sublist in boxes_haar_raw for box in sublist]
+
+    # Flatten DNN
+    boxes_dnn_raw = [f.result() for f in dnn_futures]
+    boxes_dnn = [box for sublist in boxes_dnn_raw for box in sublist]
+
+    # print(box1)
     print(boxes_haar)
     print(boxes_dnn)
 
