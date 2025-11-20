@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import haar_detector
 import dnn_detector
+import multiprocessing
 from multiprocessing import Pool
 from multiprocessing.dummy import Pool as ThreadPool
 import itertools
@@ -61,9 +62,11 @@ if not flag_rotation:
 flag_quit = False
 
 # @njit(parallel=True)
-def haar_parallel(args):
+def haar_parallel_shared(angle):
+    # Access the frame from the shared dictionary (requires dictionary object access)
     start_time = time.time()
-    frame, angle = args
+    frame_original = shared_frame_dict['frame']
+    # frame, angle = args
     
     frame_rotated, rotation_matrix = helpers.rotate_image_without_cropping(frame, angle)
     
@@ -75,9 +78,11 @@ def haar_parallel(args):
     return boxes, angle, end_time - start_time
 
 # @njit(parallel=True)
-def dnn_parallel(args):
+def dnn_parallel_shared(angle):
+    # Access the frame from the shared dictionary (requires dictionary object access)
     start_time = time.time()
-    frame, angle = args
+    frame_original = shared_frame_dict['frame']
+    # frame, angle = args
 
     frame_rotated, rotation_matrix = helpers.rotate_image_without_cropping(frame, angle)
     
@@ -89,44 +94,54 @@ def dnn_parallel(args):
 
 # executor = ThreadPoolExecutor(max_workers=360/angle_step)
 if __name__ == '__main__':
-    with Pool() as pool:
-        while not flag_quit:
-            # Capture frame
-            ret, frame_original = cap.read()
-            if not ret:
-                break
+# 1. Start a Manager
+    with multiprocessing.Manager() as manager:
+        # Create a shared dictionary to hold the frame
+        shared_frame_dict = manager.dict() 
+        # Create the Pool (Workers will be able to access the Manager)
+        with multiprocessing.Pool() as pool:
+            while not flag_quit:
+                # Capture frame
+                ret, frame_original = cap.read()
+                if not ret:
+                    break
 
-            # frame_haar = frame_original.copy()
-            # frame_dnn = frame_original.copy()
-            
-            angles = range(0, 360, angle_step)
-            task_arguments = list(itertools.product([frame_original], angles))
+                # 2. Update the Shared Memory with the new frame
+                # NOTE: Even Manager.dict() requires pickling/copying the data 
+                # when assigning the value, but it's often more efficient 
+                # than passing as a task argument.
+                shared_frame_dict['frame'] = frame_original.copy()
+                
+                angles = range(0, 360, angle_step)
+                # task_arguments = list(itertools.product([frame_original], angles))
 
-            start_time = time.time()
+                start_time = time.time()
 
-            # with Pool(processes=5) as pool:
-            results_haar = pool.imap(haar_parallel, task_arguments)
-            results_dnn = pool.imap(dnn_parallel, task_arguments)
-            
-            for boxes, angle, duration in results_haar:
-                print(f" got boxes {boxes} at angle {angle} in {duration:.2f}s")
-                frame_haar = helpers.add_boxes(frame_original, boxes, angle % 360)
+                # with Pool(processes=5) as pool:
+                # results_haar = pool.imap(haar_parallel, task_arguments)
+                # results_dnn = pool.imap(dnn_parallel, task_arguments)
+                results_haar = pool.imap(dnn_parallel_shared, angles)
+                results_dnn = pool.imap(dnn_parallel_shared, angles)
+                
+                for boxes, angle, duration in results_haar:
+                    print(f" got boxes {boxes} at angle {angle} in {duration:.2f}s")
+                    frame_haar = helpers.add_boxes(frame_original, boxes, angle % 360)
 
-            for boxes, angle, duration in results_dnn:
-                print(f" got boxes {boxes} at angle {angle} in {duration:.2f}s")
-                frame_dnn = helpers.add_boxes(frame_original, boxes, angle % 360)
+                for boxes, angle, duration in results_dnn:
+                    print(f" got boxes {boxes} at angle {angle} in {duration:.2f}s")
+                    frame_dnn = helpers.add_boxes(frame_original, boxes, angle % 360)
 
-            end_time = time.time()
-            print(f"CPU tasks completed in {end_time - start_time:.2f} seconds")
-            
-            display_frame_haar = cv2.resize(frame_haar, (0, 0), fx=scale, fy=scale)
-            display_frame_dnn = cv2.resize(frame_dnn, (0, 0), fx=scale, fy=scale)
+                end_time = time.time()
+                print(f"CPU tasks completed in {end_time - start_time:.2f} seconds")
+                
+                display_frame_haar = cv2.resize(frame_haar, (0, 0), fx=scale, fy=scale)
+                display_frame_dnn = cv2.resize(frame_dnn, (0, 0), fx=scale, fy=scale)
 
-            cv2.imshow('Camera (HAAR)', display_frame_haar)
-            cv2.imshow('Camera (DNN)', display_frame_dnn)
+                cv2.imshow('Camera (HAAR)', display_frame_haar)
+                cv2.imshow('Camera (DNN)', display_frame_dnn)
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                flag_quit = True
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    flag_quit = True
 
     cap.release()
     out_dnn.release()
