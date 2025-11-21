@@ -21,15 +21,6 @@ def get_frame_size(camera_in_use):
 # frame_dnn_width  = int(cap.get(cv2.CAP_PROP_frame_dnn_WIDTH))
 # frame_dnn_height = int(cap.get(cv2.CAP_PROP_frame_dnn_HEIGHT))
 
-def rotate_image(img, angle, scale = 1.0):
-    (h, w) = img.shape[:2]
-    center = (w // 2, h // 2)
-
-    rot_mat = cv2.getRotationMatrix2D(center, angle, scale)
-    
-    rotated_img = cv2.warpAffine(img, rot_mat, (w, h))
-    return rotated_img, rot_mat
-
 def rotate_points_back(points, M):
     M_inv = cv2.invertAffineTransform(M)
     ones = np.ones((points.shape[0], 1))
@@ -38,26 +29,31 @@ def rotate_points_back(points, M):
 
 
 
-
-
-
-def rotate_image_without_cropping(img, angle, scale = 1.0):
+def get_rot_mat(img, angle, scale = 1.0, cropping = False):
     (h, w) = img.shape[:2]
     center = (w // 2, h // 2)
 
     rot_mat = cv2.getRotationMatrix2D(center, angle, scale)
 
+    new_w = w
+    new_h = h
+
     # Compute the new bounding dimensions
-    abs_cos = abs(rot_mat[0, 0])
-    abs_sin = abs(rot_mat[0, 1])
-    new_w = int(h * abs_sin + w * abs_cos)
-    new_h = int(h * abs_cos + w * abs_sin)
+    if not cropping:
+        abs_cos = abs(rot_mat[0, 0])
+        abs_sin = abs(rot_mat[0, 1])
+        new_w = int(h * abs_sin + w * abs_cos)
+        new_h = int(h * abs_cos + w * abs_sin)
 
-    # Adjust the rotation matrix to account for translation
-    rot_mat[0, 2] += new_w / 2 - center[0]
-    rot_mat[1, 2] += new_h / 2 - center[1]
+        # Adjust the rotation matrix to account for translation
+        rot_mat[0, 2] += new_w / 2 - center[0]
+        rot_mat[1, 2] += new_h / 2 - center[1]
 
-    rotated_img = cv2.warpAffine(img, rot_mat, (new_w, new_h))
+    return rot_mat, (new_w, new_h)
+
+def rotate_image(img, angle, scale = 1.0, cropping=False):
+    rot_mat, dimensions = get_rot_mat(img, angle, scale, cropping)
+    rotated_img = cv2.warpAffine(img, rot_mat, dimensions)
     return rotated_img, rot_mat
 
 
@@ -136,10 +132,10 @@ def detect_faces_multi_rotation_mapped(frame, detector, step=10):
 
 
 # ========================================
-def add_boxes(frame_original, boxes, angle):
+def add_boxes(frame_original, boxes):
     # draw all boxes on original frame
     frame = frame_original.copy()
-    for (xmin, ymin, xmax, ymax) in boxes:
+    for (xmin, ymin, xmax, ymax, angle) in boxes:
         cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
         cv2.putText(frame, f"{angle}°", (xmin, max(0, ymin-8)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 1)
@@ -148,7 +144,7 @@ def add_boxes(frame_original, boxes, angle):
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
     return frame
 
-def construct_boxes(faces, rot_mat=np.eye(3)[:-1]):
+def construct_boxes(faces, rot_mat=np.eye(3)[:-1], angle=0):
     boxes = []
     for (x, y, w, h) in faces:
         # corners in rotated frame
@@ -168,6 +164,6 @@ def construct_boxes(faces, rot_mat=np.eye(3)[:-1]):
         xmax = int(unrot_corners[:,0].max())
         ymax = int(unrot_corners[:,1].max())
 
-        boxes.append((xmin, ymin, xmax, ymax))
+        boxes.append((xmin, ymin, xmax, ymax, angle))
 
     return boxes

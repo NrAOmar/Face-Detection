@@ -19,7 +19,7 @@ scale, frame_width, frame_height = helpers.get_frame_size(1)
 # 1) CAMERA THREAD: always fast
 # -------------------------------------------
 def camera_loop():
-    global latest_frame, frame_rotated, rotation_matrix, stop_flag
+    global latest_frame, stop_flag
     cap = cv2.VideoCapture(1)
 
     while not stop_flag:
@@ -27,7 +27,6 @@ def camera_loop():
         if ret:
             frame = cv2.resize(frame, (0, 0), fx=scale, fy=scale)
             latest_frame = frame.copy()
-            frame_rotated, rotation_matrix = helpers.rotate_image_without_cropping(frame, 90)
         else:
             time.sleep(0.001)
 
@@ -37,15 +36,15 @@ def camera_loop():
 # -------------------------------------------
 # 2) PROCESSING THREAD: heavy operations
 # -------------------------------------------
-def processing_loop():
-    global boxes_haar, frame_rotated, processed_timestamp, latest_frame, stop_flag
+def processing_loop(angle):
+    global boxes_haar, processed_timestamp, latest_frame, stop_flag
 
     while not stop_flag:
         if latest_frame is None:
             time.sleep(0.001)
             continue
 
-        frame = latest_frame.copy()
+        # frame = latest_frame.copy()
 
         # -----------------------------
         # 🔥 Your heavy processing here
@@ -54,8 +53,9 @@ def processing_loop():
 
         # frame_rotated2, rotation_matrix = helpers.rotate_image(frame, 90)
         
+        frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame, angle)
         faces = haar_detector.detect_faces(frame_rotated)
-        boxes = helpers.construct_boxes(faces, rotation_matrix)
+        boxes = helpers.construct_boxes(faces, rotation_matrix, angle)
 
         # -----------------------------
 
@@ -68,6 +68,11 @@ def processing_loop():
 # ------------------------------------------------
 threading.Thread(target=camera_loop, daemon=True).start()
 threading.Thread(target=processing_loop, daemon=True).start()
+
+angle_step = 45
+for angle in range(0, 360, angle_step):
+    threading.Thread(target=processing_loop, args=(angle,), daemon=True).start()
+    # threads.append(t)
 
 boxes = []
 # ------------------------------------------------
@@ -91,16 +96,16 @@ try:
             
             if boxes_haar is not None and (now - processed_timestamp) < 0.1:
                 boxes.extend(boxes_haar)
-                while len(boxes) >= 10:
+                while len(boxes) > 12:
                     boxes.pop(0)
                 print(len(boxes))
-                latest_frame = helpers.add_boxes(latest_frame, boxes, 0 % 360)
-                frame_rotated = helpers.add_boxes(frame_rotated, boxes, 90 % 360)
+                latest_frame = helpers.add_boxes(latest_frame, boxes)
+                # frame_rotated = helpers.add_boxes(frame_rotated, boxes, 90 % 360)
             
             # latest_frame = cv2.resize(latest_frame, (0, 0), fx=scale, fy=scale)
             # frame_rotated = cv2.resize(frame_rotated, (0, 0), fx=scale, fy=scale)
             cv2.imshow("Output", latest_frame)
-            cv2.imshow("Rotated", frame_rotated)
+            # cv2.imshow("Rotated", frame_rotated)
 
         if cv2.waitKey(1) & 0xFF == 27:
             break
