@@ -14,16 +14,18 @@ processed_timestamp = 0.0
 stop_flag = False
 
 
+scale, frame_width, frame_height = helpers.get_frame_size(1)
 # -------------------------------------------
 # 1) CAMERA THREAD: always fast
 # -------------------------------------------
 def camera_loop():
-    global latest_frame, frame_rotated, stop_flag
+    global latest_frame, frame_rotated, rotation_matrix, stop_flag
     cap = cv2.VideoCapture(1)
 
     while not stop_flag:
         ret, frame = cap.read()
         if ret:
+            frame = cv2.resize(frame, (0, 0), fx=scale, fy=scale)
             latest_frame = frame.copy()
             frame_rotated, rotation_matrix = helpers.rotate_image_without_cropping(frame, 90)
         else:
@@ -36,7 +38,7 @@ def camera_loop():
 # 2) PROCESSING THREAD: heavy operations
 # -------------------------------------------
 def processing_loop():
-    global boxes_haar, processed_timestamp, latest_frame, stop_flag
+    global boxes_haar, frame_rotated, processed_timestamp, latest_frame, stop_flag
 
     while not stop_flag:
         if latest_frame is None:
@@ -50,9 +52,9 @@ def processing_loop():
         # -----------------------------
         # Example: slow grayscale
 
-        frame_rotated2, rotation_matrix = helpers.rotate_image_without_cropping(frame, 90)
+        # frame_rotated2, rotation_matrix = helpers.rotate_image(frame, 90)
         
-        faces = haar_detector.detect_faces(frame_rotated2)
+        faces = haar_detector.detect_faces(frame_rotated)
         boxes = helpers.construct_boxes(faces, rotation_matrix)
 
         # -----------------------------
@@ -95,6 +97,8 @@ try:
                 latest_frame = helpers.add_boxes(latest_frame, boxes, 0 % 360)
                 frame_rotated = helpers.add_boxes(frame_rotated, boxes, 90 % 360)
             
+            # latest_frame = cv2.resize(latest_frame, (0, 0), fx=scale, fy=scale)
+            # frame_rotated = cv2.resize(frame_rotated, (0, 0), fx=scale, fy=scale)
             cv2.imshow("Output", latest_frame)
             cv2.imshow("Rotated", frame_rotated)
 
