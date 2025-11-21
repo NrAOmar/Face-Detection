@@ -1,58 +1,110 @@
 import cv2
 import threading
 import time
+import helpers
+import haar_detector
 
-FRAME_RATE = 20
-FRAME_PERIOD = 1.0 / FRAME_RATE
+DISPLAY_FPS = 20
+DISPLAY_PERIOD = 1.0 / DISPLAY_FPS
 
 latest_frame = None
+processed_frame = None
+boxes_haar = None
+processed_timestamp = 0.0
 stop_flag = False
 
 
+# -------------------------------------------
+# 1) CAMERA THREAD: always fast
+# -------------------------------------------
 def camera_loop():
-    """Thread that grabs frames continuously."""
-    global latest_frame, stop_flag
-
+    global latest_frame, frame_rotated, stop_flag
     cap = cv2.VideoCapture(1)
 
     while not stop_flag:
         ret, frame = cap.read()
         if ret:
-            latest_frame = frame
+            latest_frame = frame.copy()
+            frame_rotated, rotation_matrix = helpers.rotate_image_without_cropping(frame, 90)
         else:
             time.sleep(0.001)
 
     cap.release()
 
 
-# Start camera thread
-cam_thread = threading.Thread(target=camera_loop, daemon=True)
-cam_thread.start()
+# -------------------------------------------
+# 2) PROCESSING THREAD: heavy operations
+# -------------------------------------------
+def processing_loop():
+    global boxes_haar, processed_timestamp, latest_frame, stop_flag
+
+    while not stop_flag:
+        if latest_frame is None:
+            time.sleep(0.001)
+            continue
+
+        frame = latest_frame.copy()
+
+        # -----------------------------
+        # 🔥 Your heavy processing here
+        # -----------------------------
+        # Example: slow grayscale
+
+        frame_rotated2, rotation_matrix = helpers.rotate_image_without_cropping(frame, 90)
+        
+        faces = haar_detector.detect_faces(frame_rotated2)
+        boxes = helpers.construct_boxes(faces, rotation_matrix)
+
+        # -----------------------------
+
+        boxes_haar = boxes
+        processed_timestamp = time.time()
 
 
-# MAIN THREAD: fixed FPS display
-last_time = time.time()
+# ------------------------------------------------
+# Start background threads
+# ------------------------------------------------
+threading.Thread(target=camera_loop, daemon=True).start()
+threading.Thread(target=processing_loop, daemon=True).start()
+
+boxes = []
+# ------------------------------------------------
+# 3) DISPLAY LOOP — ALWAYS 20 FPS, NO LAG
+# ------------------------------------------------
+last_display = time.time()
 
 try:
     while True:
         now = time.time()
-        if now - last_time >= FRAME_PERIOD:
-            last_time = now
+        if now - last_display >= DISPLAY_PERIOD:
+            last_display = now
 
-            if latest_frame is not None:
-                cv2.imshow("Camera", latest_frame)
+            if latest_frame is None:
+                continue
 
-            # keep window responsive
-            if cv2.waitKey(1) == 27:
-                break
+            # ----------------------------------------
+            # Decide what to show:
+            # processed frame is valid if < 0.5s old
+            # ----------------------------------------
+            
+            if boxes_haar is not None and (now - processed_timestamp) < 0.1:
+                boxes.extend(boxes_haar)
+                while len(boxes) >= 10:
+                    boxes.pop(0)
+                print(len(boxes))
+                latest_frame = helpers.add_boxes(latest_frame, boxes, 0 % 360)
+                frame_rotated = helpers.add_boxes(frame_rotated, boxes, 90 % 360)
+            
+            cv2.imshow("Output", latest_frame)
+            cv2.imshow("Rotated", frame_rotated)
 
-        else:
-            # tiny sleep to not burn CPU
-            time.sleep(0.001)
+        if cv2.waitKey(1) & 0xFF == 27:
+            break
+
+        time.sleep(0.001)
 
 except KeyboardInterrupt:
     pass
 
 stop_flag = True
-cam_thread.join()
 cv2.destroyAllWindows()
