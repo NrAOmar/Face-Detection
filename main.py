@@ -52,9 +52,7 @@ def processing_loop(angle):
         # -----------------------------
         # 🔥 Your heavy processing here
         # -----------------------------
-        frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)
-        print(f"Angle {angle} rotation matrix:", rotation_matrix)
-        
+        frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
         faces = haar_detector.detect_faces(frame_rotated)
         boxes = helpers.construct_boxes(helpers.get_frame_size(1), faces, rotation_matrix, angle)
         # -----------------------------
@@ -92,20 +90,30 @@ try:
             if latest_frame is None:
                 continue
 
-            # ----------------------------------------
+           # ----------------------------------------
             # Decide what to show:
             # processed frame is valid if < 0.5s old
             # ----------------------------------------
-            
+            new_combined_boxes = []
+
             with lock:
                 for angle, boxes in boxes_by_angle.items():
-                    if now - timestamps_by_angle.get(angle, 999) < 0.5:
-                        combined_boxes.extend(boxes)
+                    ts = timestamps_by_angle.get(angle, 0)
+                    if now - ts < 0.5:
+                        # store each box with its timestamp
+                        for box in boxes:
+                            new_combined_boxes.append((box, ts))
 
-            # Limit box history if needed
-            combined_boxes = combined_boxes[-12:]
+            # Remove old boxes (older than 0.5s)
+            combined_boxes = [(box, ts) for box, ts in combined_boxes if now - ts < 0.2]
 
-            output_frame = helpers.add_boxes(latest_frame.copy(), combined_boxes)
+            # Add new boxes
+            combined_boxes.extend(new_combined_boxes)
+
+            # Extract just the box coordinates for drawing
+            boxes_to_draw = [box for box, ts in combined_boxes]
+
+            output_frame = helpers.add_boxes(latest_frame.copy(), boxes_to_draw)
             cv2.imshow("Output", output_frame)
 
         if cv2.waitKey(1) & 0xFF == 27:
