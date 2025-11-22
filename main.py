@@ -10,7 +10,6 @@ DISPLAY_PERIOD = 1.0 / DISPLAY_FPS
 latest_frame = None
 processed_frame = None
 boxes_haar = None
-processed_timestamp = 0.0
 stop_flag = False
 
 
@@ -41,7 +40,7 @@ lock = threading.Lock()
 # 2) PROCESSING THREAD: heavy operations
 # -------------------------------------------
 def processing_loop(angle):
-    global boxes_haar, processed_timestamp, latest_frame, stop_flag
+    global latest_frame, stop_flag
 
     while not stop_flag:
         if latest_frame is None:
@@ -53,14 +52,11 @@ def processing_loop(angle):
         # -----------------------------
         # 🔥 Your heavy processing here
         # -----------------------------
-        # Example: slow grayscale
-
-        # frame_rotated2, rotation_matrix = helpers.rotate_image(frame, 90)
-        
         frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)
+        print(f"Angle {angle} rotation matrix:", rotation_matrix)
+        
         faces = haar_detector.detect_faces(frame_rotated)
-        boxes = helpers.construct_boxes(faces, rotation_matrix, angle)
-
+        boxes = helpers.construct_boxes(helpers.get_frame_size(1), faces, rotation_matrix, angle)
         # -----------------------------
 
         # Write results ONLY for this angle
@@ -72,9 +68,10 @@ def processing_loop(angle):
 # ------------------------------------------------
 # Start background threads
 # ------------------------------------------------
-threading.Thread(target=camera_loop, daemon=True).start()
 threads = []
-angle_step = 45
+threading.Thread(target=camera_loop, daemon=True).start()
+
+angle_step = 20
 for angle in range(0, 360, angle_step):
     t = threading.Thread(target=processing_loop, args=(angle,), daemon=True)
     t.start()
@@ -102,7 +99,7 @@ try:
             
             with lock:
                 for angle, boxes in boxes_by_angle.items():
-                    if now - timestamps_by_angle.get(angle, 999) < 0.2:
+                    if now - timestamps_by_angle.get(angle, 999) < 0.5:
                         combined_boxes.extend(boxes)
 
             # Limit box history if needed
