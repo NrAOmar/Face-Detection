@@ -3,6 +3,7 @@ import threading
 import time
 import helpers
 import haar_detector
+import dnn_detector
 
 
 # Features to enable
@@ -52,12 +53,31 @@ latest_frame = None
 processed_frame = None
 stop_flag = False
 
+
+# Model file names
+PROTOTXT = "deploy.prototxt"
+CAFFEMODEL = "res10_300x300_ssd_iter_140000.caffemodel"
+
+# URLs used by the official OpenCV sample
+PROTOTXT_URL = "https://raw.githubusercontent.com/opencv/opencv/master/samples/dnn/face_detector/deploy.prototxt"
+CAFFEMODEL_URL = "https://github.com/opencv/opencv_3rdparty/raw/dnn_samples_face_detector_20170830/res10_300x300_ssd_iter_140000.caffemodel"
+
+# Try to make sure the model files exist (skip if offline and already present)
+have_proto = dnn_detector.ensure_file(PROTOTXT, PROTOTXT_URL)
+have_model = dnn_detector.ensure_file(CAFFEMODEL, CAFFEMODEL_URL)
+
+if not (have_proto and have_model):
+    print("Model files missing. Place deploy.prototxt and the caffemodel next to this script.")
+    # You can still continue if you already have them elsewhere and set absolute paths.
+    # exit()
+
+
 # -------------------------------------------
 # 1) CAMERA THREAD: always fast
 # -------------------------------------------
 def camera_loop():
     global latest_frame, stop_flag
-    cap = cv2.VideoCapture(1)
+    # cap = cv2.VideoCapture(1)
 
     while not stop_flag:
         ret, frame = cap.read()
@@ -77,7 +97,7 @@ lock = threading.Lock()
 # -------------------------------------------
 # 2) PROCESSING THREAD: heavy operations
 # -------------------------------------------
-def processing_loop(angle):
+def haar_loop(angle):
     global latest_frame, stop_flag
 
     while not stop_flag:
@@ -85,6 +105,7 @@ def processing_loop(angle):
             time.sleep(0.001)
             continue
 
+        tmp_start = time.time()
         # frame = latest_frame.copy()
 
         # -----------------------------
@@ -92,13 +113,47 @@ def processing_loop(angle):
         # -----------------------------
         frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
         faces = haar_detector.detect_faces(frame_rotated)
-        boxes = helpers.construct_boxes(helpers.get_frame_size(1), faces, rotation_matrix, angle)
+        boxes = helpers.construct_boxes((frame_width, frame_height), faces, rotation_matrix, (angle,))
         # -----------------------------
 
         # Write results ONLY for this angle
         with lock:
-            boxes_by_angle[angle] = boxes
-            timestamps_by_angle[angle] = time.time()
+            boxes_by_angle[("haar", angle)] = boxes
+            timestamps_by_angle[("haar", angle)] = time.time()
+        
+        tmp_end = time.time()
+        print(f"duration = {tmp_end - tmp_start}")
+
+def dnn_loop(angle):
+    global latest_frame, stop_flag
+    
+    while not stop_flag:
+        if latest_frame is None:
+            time.sleep(0.001)
+            continue
+
+        tmp_start = time.time()
+        # frame = latest_frame.copy()
+
+        # -----------------------------
+        # 🔥 Your heavy processing here
+        # -----------------------------
+        frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
+        # faces_haar = haar_detector.detect_faces(frame_rotated)
+        faces_dnn, confidence = dnn_detector.detect_faces(frame_rotated, (PROTOTXT, CAFFEMODEL))
+        # print(f"faces haar at angle {angle}: {faces_haar}\n")
+        # print(f"faces dnn at angle {angle}: {faces_dnn}\n")
+        boxes = helpers.construct_boxes((frame_width, frame_height), faces_dnn, rotation_matrix, (angle, confidence))
+        # boxes.extend(helpers.construct_boxes((frame_width, frame_height), faces_dnn, rotation_matrix, angle))
+        # -----------------------------
+
+        # Write results ONLY for this angle
+        with lock:
+            boxes_by_angle[("dnn", angle)] = boxes
+            timestamps_by_angle[("dnn", angle)] = time.time()
+        
+        tmp_end = time.time()
+        print(f"duration = {tmp_end - tmp_start}")
 
 
 # ------------------------------------------------
@@ -109,9 +164,8 @@ threading.Thread(target=camera_loop, daemon=True).start()
 
 angle_step = 20
 for angle in range(0, 360, angle_step):
-    t = threading.Thread(target=processing_loop, args=(angle,), daemon=True)
-    t.start()
-    threads.append(t)
+    threading.Thread(target=haar_loop, args=(angle,), daemon=True).start()
+    threading.Thread(target=dnn_loop, args=(angle,), daemon=True).start()
 
 combined_boxes = []
 # ------------------------------------------------
@@ -135,8 +189,8 @@ try:
             new_combined_boxes = []
 
             with lock:
-                for angle, boxes in boxes_by_angle.items():
-                    ts = timestamps_by_angle.get(angle, 0)
+                for key, boxes in boxes_by_angle.items():
+                    ts = timestamps_by_angle.get(key, 0)
                     if now - ts < 0.5:
                         # store each box with its timestamp
                         for box in boxes:
@@ -147,6 +201,7 @@ try:
 
             # Add new boxes
             combined_boxes.extend(new_combined_boxes)
+            # combined_boxes = combined_boxes[-12:]
 
             # Extract just the box coordinates for drawing
             boxes_to_draw = [box for box, ts in combined_boxes]

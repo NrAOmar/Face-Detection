@@ -54,9 +54,9 @@ def rotate_image(img, angle, scale = 1.0, cropping=False):
     rotated_img = cv2.warpAffine(img, rot_mat, dimensions)
     return rotated_img, rot_mat
 
-def construct_boxes(frame_size, faces, rot_mat=np.eye(3)[:-1], angle=0):
+def construct_boxes(frame_size, faces, rot_mat, texts):
     boxes = []
-    frame_h, frame_w = frame_size[1:]
+    frame_w, frame_h = frame_size[0:2]
     
     for (x, y, w, h) in faces:
         # corners in rotated frame
@@ -74,17 +74,20 @@ def construct_boxes(frame_size, faces, rot_mat=np.eye(3)[:-1], angle=0):
         xmin, xmax = np.clip([unrot_corners[:,0].min(), unrot_corners[:,0].max()], 0, frame_w-1).astype(int)
         ymin, ymax = np.clip([unrot_corners[:,1].min(), unrot_corners[:,1].max()], 0, frame_h-1).astype(int)
 
-        boxes.append((xmin, ymin, xmax, ymax, angle))
+        boxes.append((xmin, ymin, xmax, ymax, texts))
 
     return boxes
 
 def add_boxes(frame_original, boxes):
     # draw all boxes on original frame
     frame = frame_original.copy()
-    for (xmin, ymin, xmax, ymax, angle) in boxes:
+    for (xmin, ymin, xmax, ymax, texts) in boxes:
         cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
-        cv2.putText(frame, f"{angle}°", (xmin, max(0, ymin+16)),
+        cv2.putText(frame, f"{texts[0]}°", (xmin, max(0, ymin+16)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 1)
+        if len(texts) > 1:
+            cv2.putText(frame, f"{texts[1]}", (xmin, max(0, ymin-8)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 1)
 
     cv2.putText(frame, f"Faces: {len(boxes)}", (10,30),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
