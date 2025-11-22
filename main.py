@@ -113,13 +113,13 @@ def dnn_loop(angle):
 # ------------------------------------------------
 threads = []
 threading.Thread(target=camera.camera_loop, daemon=True).start()
-threading.Thread(target=haar_loop, args=(340,), daemon=True).start()
+# threading.Thread(target=haar_loop, args=(340,), daemon=True).start()
 # threading.Thread(target=haar_loop, args=(20,), daemon=True).start()
 
 angle_step = 20
-# for angle in range(0, 360, angle_step):
-#     threading.Thread(target=haar_loop, args=(angle,), daemon=True).start()
-#     threading.Thread(target=dnn_loop, args=(angle,), daemon=True).start()
+for angle in range(0, 360, angle_step):
+    threading.Thread(target=haar_loop, args=(angle,), daemon=True).start()
+    threading.Thread(target=dnn_loop, args=(angle,), daemon=True).start()
 
 combined_boxes = []
 # ------------------------------------------------
@@ -162,7 +162,6 @@ try:
             # Extract just the box coordinates for drawing
             boxes_to_draw = [box for box, ts in combined_boxes]
 
-            print(boxes_to_draw)
             output_frame = helpers.add_boxes(latest_frame.copy(), boxes_to_draw)
             # rotated_frame = helpers.add_boxes(rotated_frame.copy(), boxes_to_draw, False)
             cv2.imshow("Camera (Haar)", output_frame)

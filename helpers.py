@@ -50,7 +50,7 @@ def construct_boxes(faces, texts):
             [x+w, y+h],
         ], dtype=np.float32)
         boxes.append((corners, texts))
-
+    
     return boxes
 
 def add_boxes(frame, boxes, rotate_back=True):
@@ -58,8 +58,10 @@ def add_boxes(frame, boxes, rotate_back=True):
         # rotate corners back
         angle = texts[0]
 
+        print(corners)
+        rot_mat, dimensions = get_rot_mat(angle)
         if rotate_back:
-            corners = rotate_points_back(corners, get_rot_mat(angle))
+            corners = rotate_points_back(corners, rot_mat)
 
         # fit axis-aligned box
         xmin, ymin, xmax, ymax = corners
