@@ -27,8 +27,6 @@ def rotate_points_back(points, M):
     pts_homo = np.hstack([points, ones])
     return (M_inv @ pts_homo.T).T
 
-
-
 def get_rot_mat(img, angle, scale = 1.0, cropping = False):
     (h, w) = img.shape[:2]
     center = (w // 2, h // 2)
@@ -56,94 +54,6 @@ def rotate_image(img, angle, scale = 1.0, cropping=False):
     rotated_img = cv2.warpAffine(img, rot_mat, dimensions)
     return rotated_img, rot_mat
 
-
-
-
-
-
-
-
-
-
-def map_rotated_rect_to_original(x, y, w, h, Minv):
-    """
-    Given a rectangle (x,y,w,h) in rotated-image coords and the inverse affine matrix Minv (2x3),
-    map the rectangle corners back to the original image and return an axis-aligned bounding box
-    (xmin, ymin, w_new, h_new) in original-image coordinates.
-    """
-    # corners in rotated image coords
-    corners = np.array([
-        [x,     y,     1],
-        [x + w, y,     1],
-        [x,     y + h, 1],
-        [x + w, y + h, 1]
-    ]).T  # shape (3, 4)
-
-    # build 3x3 inverse matrix from 2x3 Minv for homogeneous multiplication
-    Minv_full = np.vstack([Minv, [0, 0, 1]])  # shape (3,3)
-
-    mapped = Minv_full @ corners  # shape (3,4)
-    xs = mapped[0, :]
-    ys = mapped[1, :]
-
-    xmin = int(np.clip(xs.min(), 0, w-1))
-    ymin = int(np.clip(ys.min(), 0, h-1))
-    xmax = int(np.clip(xs.max(), 0, w-1))
-    ymax = int(np.clip(ys.max(), 0, h-1))
-
-    return xmin, ymin, xmax - xmin, ymax - ymin
-
-def detect_faces_multi_rotation_mapped(frame, detector, step=10):
-    """
-    Rotate frame by multiples of `step` degrees, detect faces in each rotated image,
-    and map bounding boxes back to the original frame coordinates.
-    Returns list of tuples (mapped_bbox, angle) where mapped_bbox = (x,y,w,h).
-    """
-    h, w = frame.shape[:2]
-    center = (w // 2, h // 2)
-
-    mapped_detections = []
-
-    for angle in range(0, 360, step):
-        # rotation matrix and rotated image
-        M = cv2.getRotationMatrix2D(center, angle, 1.0)
-        rotated = cv2.warpAffine(frame, M, (w, h))
-
-        # detect on rotated image
-        gray = cv2.cvtColor(rotated, cv2.COLOR_BGR2GRAY)
-        faces = detector.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(40, 40))
-
-        if len(faces) == 0:
-            continue
-
-        # inverse affine to map back to original coords
-        Minv = cv2.invertAffineTransform(M)
-
-        for (x, y, fw, fh) in faces:
-            mapped_box = map_rotated_rect_to_original(x, y, fw, fh, Minv)
-            mapped_detections.append((mapped_box, angle))
-
-    return mapped_detections
-
-
-
-
-
-
-
-# ========================================
-def add_boxes(frame_original, boxes):
-    # draw all boxes on original frame
-    frame = frame_original.copy()
-    for (xmin, ymin, xmax, ymax, angle) in boxes:
-        cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
-        cv2.putText(frame, f"{angle}°", (xmin, max(0, ymin-8)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 1)
-
-    cv2.putText(frame, f"Faces: {len(boxes)}", (10,30),
-                cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
-    return frame
-
 def construct_boxes(faces, rot_mat=np.eye(3)[:-1], angle=0):
     boxes = []
     for (x, y, w, h) in faces:
@@ -167,3 +77,15 @@ def construct_boxes(faces, rot_mat=np.eye(3)[:-1], angle=0):
         boxes.append((xmin, ymin, xmax, ymax, angle))
 
     return boxes
+
+def add_boxes(frame_original, boxes):
+    # draw all boxes on original frame
+    frame = frame_original.copy()
+    for (xmin, ymin, xmax, ymax, angle) in boxes:
+        cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+        cv2.putText(frame, f"{angle}°", (xmin, max(0, ymin-8)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 1)
+
+    cv2.putText(frame, f"Faces: {len(boxes)}", (10,30),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
+    return frame
