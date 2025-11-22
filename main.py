@@ -4,16 +4,54 @@ import time
 import helpers
 import haar_detector
 
-DISPLAY_FPS = 20
-DISPLAY_PERIOD = 1.0 / DISPLAY_FPS
+
+# Features to enable
+flag_rotation = True
+flag_haar = True
+flag_dnn = True
+flag_enhancement = False
+flag_lowPassFilter = False
+flag_biometric = False
+camera_in_use = 2 # start with camera in the lab
+
+# Open camera (macOS AVFoundation). Try 2 then 1 then 0.
+cap = cv2.VideoCapture(camera_in_use)
+while not cap.isOpened() and camera_in_use > 0:
+    camera_in_use -= 1
+    cap = cv2.VideoCapture(camera_in_use)
+
+if not cap.isOpened():
+    print("Error: Could not open camera.")
+    exit()
+
+# Get frame_dnn size
+scale, frame_width, frame_height = helpers.get_frame_size(camera_in_use)
+
+fps = cap.get(cv2.CAP_PROP_FPS)
+if fps == 0 or fps is None:
+    fps = 20.0  # safe fallback
+print(f"Recording at {fps} FPS")
+
+# Video writer
+out_haar = cv2.VideoWriter(
+    'output_haar.mp4',
+    cv2.VideoWriter_fourcc(*'mp4v'),
+    fps,
+    (int(scale * frame_width), int(scale * frame_height))
+)
+out_dnn = cv2.VideoWriter(
+    'output_dnn.mp4',
+    cv2.VideoWriter_fourcc(*'mp4v'),
+    fps,
+    (int(scale * frame_width), int(scale * frame_height))
+)
+
+print("Recording... Press 'q' to stop.")
 
 latest_frame = None
 processed_frame = None
-boxes_haar = None
 stop_flag = False
 
-
-scale, frame_width, frame_height = helpers.get_frame_size(1)
 # -------------------------------------------
 # 1) CAMERA THREAD: always fast
 # -------------------------------------------
@@ -84,7 +122,7 @@ last_display = time.time()
 try:
     while True:
         now = time.time()
-        if now - last_display >= DISPLAY_PERIOD:
+        if now - last_display >= 1/fps:
             last_display = now
 
             if latest_frame is None:
@@ -114,7 +152,11 @@ try:
             boxes_to_draw = [box for box, ts in combined_boxes]
 
             output_frame = helpers.add_boxes(latest_frame.copy(), boxes_to_draw)
-            cv2.imshow("Output", output_frame)
+            cv2.imshow("Camera (Haar)", output_frame)
+            if out_haar != "":
+                out_haar.write(output_frame)
+            else:
+                print("no haar frame found")
 
         if cv2.waitKey(1) & 0xFF == 27:
             break
@@ -125,4 +167,6 @@ except KeyboardInterrupt:
     pass
 
 stop_flag = True
+out_dnn.release()
+out_haar.release()
 cv2.destroyAllWindows()
