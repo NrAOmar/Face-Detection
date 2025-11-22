@@ -33,6 +33,10 @@ def camera_loop():
     cap.release()
 
 
+boxes_by_angle = {}
+timestamps_by_angle = {}
+lock = threading.Lock()
+
 # -------------------------------------------
 # 2) PROCESSING THREAD: heavy operations
 # -------------------------------------------
@@ -53,28 +57,30 @@ def processing_loop(angle):
 
         # frame_rotated2, rotation_matrix = helpers.rotate_image(frame, 90)
         
-        frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame, angle)
+        frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)
         faces = haar_detector.detect_faces(frame_rotated)
         boxes = helpers.construct_boxes(faces, rotation_matrix, angle)
 
         # -----------------------------
 
-        boxes_haar = boxes
-        processed_timestamp = time.time()
+        # Write results ONLY for this angle
+        with lock:
+            boxes_by_angle[angle] = boxes
+            timestamps_by_angle[angle] = time.time()
 
 
 # ------------------------------------------------
 # Start background threads
 # ------------------------------------------------
 threading.Thread(target=camera_loop, daemon=True).start()
-threading.Thread(target=processing_loop, daemon=True).start()
-
+threads = []
 angle_step = 45
 for angle in range(0, 360, angle_step):
-    threading.Thread(target=processing_loop, args=(angle,), daemon=True).start()
-    # threads.append(t)
+    t = threading.Thread(target=processing_loop, args=(angle,), daemon=True)
+    t.start()
+    threads.append(t)
 
-boxes = []
+combined_boxes = []
 # ------------------------------------------------
 # 3) DISPLAY LOOP — ALWAYS 20 FPS, NO LAG
 # ------------------------------------------------
@@ -94,18 +100,16 @@ try:
             # processed frame is valid if < 0.5s old
             # ----------------------------------------
             
-            if boxes_haar is not None and (now - processed_timestamp) < 0.1:
-                boxes.extend(boxes_haar)
-                while len(boxes) > 12:
-                    boxes.pop(0)
-                print(len(boxes))
-                latest_frame = helpers.add_boxes(latest_frame, boxes)
-                # frame_rotated = helpers.add_boxes(frame_rotated, boxes, 90 % 360)
-            
-            # latest_frame = cv2.resize(latest_frame, (0, 0), fx=scale, fy=scale)
-            # frame_rotated = cv2.resize(frame_rotated, (0, 0), fx=scale, fy=scale)
-            cv2.imshow("Output", latest_frame)
-            # cv2.imshow("Rotated", frame_rotated)
+            with lock:
+                for angle, boxes in boxes_by_angle.items():
+                    if now - timestamps_by_angle.get(angle, 999) < 0.2:
+                        combined_boxes.extend(boxes)
+
+            # Limit box history if needed
+            combined_boxes = combined_boxes[-12:]
+
+            output_frame = helpers.add_boxes(latest_frame.copy(), combined_boxes)
+            cv2.imshow("Output", output_frame)
 
         if cv2.waitKey(1) & 0xFF == 27:
             break
