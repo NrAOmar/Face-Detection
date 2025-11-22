@@ -4,7 +4,8 @@ import time
 import helpers
 import haar_detector
 import dnn_detector
-
+import camera
+from camera import stop_flag
 
 # Features to enable
 flag_rotation = True
@@ -13,43 +14,12 @@ flag_dnn = True
 flag_enhancement = False
 flag_lowPassFilter = False
 flag_biometric = False
-camera_in_use = 2 # start with camera in the lab
 
-# Open camera (macOS AVFoundation). Try 2 then 1 then 0.
-cap = cv2.VideoCapture(camera_in_use)
-while not cap.isOpened() and camera_in_use > 0:
-    camera_in_use -= 1
-    cap = cv2.VideoCapture(camera_in_use)
 
-if not cap.isOpened():
-    print("Error: Could not open camera.")
-    exit()
 
-# Get frame_dnn size
-scale, frame_width, frame_height = helpers.get_frame_size(camera_in_use)
-
-fps = cap.get(cv2.CAP_PROP_FPS)
-if fps == 0 or fps is None:
-    fps = 20.0  # safe fallback
-print(f"Recording at {fps} FPS")
-
-# Video writer
-out_haar = cv2.VideoWriter(
-    'output_haar.mp4',
-    cv2.VideoWriter_fourcc(*'mp4v'),
-    fps,
-    (int(scale * frame_width), int(scale * frame_height))
-)
-out_dnn = cv2.VideoWriter(
-    'output_dnn.mp4',
-    cv2.VideoWriter_fourcc(*'mp4v'),
-    fps,
-    (int(scale * frame_width), int(scale * frame_height))
-)
-
-print("Recording... Press 'q' to stop.")
 
 latest_frame = None
+rotated_frame = None
 processed_frame = None
 stop_flag = False
 
@@ -75,20 +45,6 @@ if not (have_proto and have_model):
 # -------------------------------------------
 # 1) CAMERA THREAD: always fast
 # -------------------------------------------
-def camera_loop():
-    global latest_frame, stop_flag
-    # cap = cv2.VideoCapture(1)
-
-    while not stop_flag:
-        ret, frame = cap.read()
-        if ret:
-            frame = cv2.resize(frame, (0, 0), fx=scale, fy=scale)
-            latest_frame = frame.copy()
-        else:
-            time.sleep(0.001)
-
-    cap.release()
-
 
 boxes_by_angle = {}
 timestamps_by_angle = {}
@@ -113,7 +69,7 @@ def haar_loop(angle):
         # -----------------------------
         frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
         faces = haar_detector.detect_faces(frame_rotated)
-        boxes = helpers.construct_boxes((frame_width, frame_height), faces, rotation_matrix, (angle,))
+        boxes = helpers.construct_boxes(faces, (angle,))
         # -----------------------------
 
         # Write results ONLY for this angle
@@ -138,13 +94,9 @@ def dnn_loop(angle):
         # -----------------------------
         # 🔥 Your heavy processing here
         # -----------------------------
-        frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
-        # faces_haar = haar_detector.detect_faces(frame_rotated)
-        faces_dnn, confidence = dnn_detector.detect_faces(frame_rotated, (PROTOTXT, CAFFEMODEL))
-        # print(f"faces haar at angle {angle}: {faces_haar}\n")
-        # print(f"faces dnn at angle {angle}: {faces_dnn}\n")
-        boxes = helpers.construct_boxes((frame_width, frame_height), faces_dnn, rotation_matrix, (angle, confidence))
-        # boxes.extend(helpers.construct_boxes((frame_width, frame_height), faces_dnn, rotation_matrix, angle))
+        frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), camera.frame_size, angle)        
+        faces, confidence = dnn_detector.detect_faces(frame_rotated, (PROTOTXT, CAFFEMODEL))
+        boxes = helpers.construct_boxes(faces, (angle, confidence))
         # -----------------------------
 
         # Write results ONLY for this angle
@@ -160,12 +112,14 @@ def dnn_loop(angle):
 # Start background threads
 # ------------------------------------------------
 threads = []
-threading.Thread(target=camera_loop, daemon=True).start()
+threading.Thread(target=camera.camera_loop, daemon=True).start()
+threading.Thread(target=haar_loop, args=(340,), daemon=True).start()
+# threading.Thread(target=haar_loop, args=(20,), daemon=True).start()
 
 angle_step = 20
-for angle in range(0, 360, angle_step):
-    threading.Thread(target=haar_loop, args=(angle,), daemon=True).start()
-    threading.Thread(target=dnn_loop, args=(angle,), daemon=True).start()
+# for angle in range(0, 360, angle_step):
+#     threading.Thread(target=haar_loop, args=(angle,), daemon=True).start()
+#     threading.Thread(target=dnn_loop, args=(angle,), daemon=True).start()
 
 combined_boxes = []
 # ------------------------------------------------
@@ -176,7 +130,9 @@ last_display = time.time()
 try:
     while True:
         now = time.time()
-        if now - last_display >= 1/fps:
+        latest_frame = camera.latest_frame
+        rotated_frame = camera.rotated_frame
+        if now - last_display >= 1/camera.fps:
             last_display = now
 
             if latest_frame is None:
@@ -206,10 +162,13 @@ try:
             # Extract just the box coordinates for drawing
             boxes_to_draw = [box for box, ts in combined_boxes]
 
+            print(boxes_to_draw)
             output_frame = helpers.add_boxes(latest_frame.copy(), boxes_to_draw)
+            # rotated_frame = helpers.add_boxes(rotated_frame.copy(), boxes_to_draw, False)
             cv2.imshow("Camera (Haar)", output_frame)
-            if out_haar != "":
-                out_haar.write(output_frame)
+            # cv2.imshow("Rotated (Haar)", rotated_frame)
+            if camera.out_haar != "":
+                camera.out_haar.write(output_frame)
             else:
                 print("no haar frame found")
 
@@ -222,6 +181,6 @@ except KeyboardInterrupt:
     pass
 
 stop_flag = True
-out_dnn.release()
-out_haar.release()
+camera.out_dnn.release()
+camera.out_haar.release()
 cv2.destroyAllWindows()
