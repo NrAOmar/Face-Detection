@@ -118,14 +118,16 @@ try:
 
             # Extract just the box coordinates for drawing
             boxes_to_draw = [box for box, ts in combined_boxes]
-            box_infos = helpers.preprocess_boxes(boxes_to_draw)
+            # Get one merged box per face
+            merged_boxes = helpers.merge_boxes_with_iou(boxes_to_draw, iou_threshold=0.4)
+            merged_boxes = helpers.filter_boxes_by_confidence(merged_boxes, min_conf=0.6)
            
             
-            detected_haar = helpers.add_boxes(latest_frame.copy(), boxes_to_draw)
+            detected_haar = helpers.add_boxes(latest_frame.copy(), merged_boxes)
             
             faces_haar = haar_detector.detect_faces(rotated_frame)
             boxes_haar = helpers.construct_boxes(faces_haar, angle_to_display)
-            detected_rotated = helpers.add_boxes(rotated_frame.copy(), boxes_haar, False)
+            detected_rotated = helpers.add_boxes(rotated_frame.copy(), boxes_haar)
             
             # faces_dnn = haar_detector.detect_faces(rotated_frame)
             # boxes_dnn = helpers.construct_boxes(faces_dnn, (angle_to_display,))
