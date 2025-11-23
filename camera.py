@@ -34,7 +34,7 @@ def get_frame_size():
 
     frame_width  = cap.get(cv2.CAP_PROP_FRAME_WIDTH)   # float `width`
     frame_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)  # float `height`
-    scale = 1.0
+    scale = 0.5
     return (scale, frame_width, frame_height)
 
 fps = cap.get(cv2.CAP_PROP_FPS)
@@ -77,7 +77,7 @@ def camera_loop():
             rotated_frame, rotation_matrix = helpers.rotate_image(frame.copy(), 340)        
             latest_frame = frame.copy()
 
-            rotated_frame = cv2.resize(rotated_frame, (0, 0), fx=frame_size[0], fy=frame_size[0])
+            # rotated_frame = cv2.resize(rotated_frame, (0, 0), fx=frame_size[0], fy=frame_size[0])
             latest_frame = cv2.resize(latest_frame, (0, 0), fx=frame_size[0], fy=frame_size[0])
         else:
             time.sleep(0.001)

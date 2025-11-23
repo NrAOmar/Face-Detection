@@ -4,6 +4,7 @@ import time
 import helpers
 import haar_detector
 import dnn_detector
+from plot_windows import display_frames_in_grid
 import camera
 from camera import stop_flag
 
@@ -73,7 +74,7 @@ threading.Thread(target=camera.camera_loop, daemon=True).start()
 # threading.Thread(target=haar_loop, args=(340,), daemon=True).start()
 # threading.Thread(target=haar_loop, args=(20,), daemon=True).start()
 
-angle_step = 20
+angle_step = 90
 for angle in range(0, 360, angle_step):
     threading.Thread(target=haar_loop, args=(angle,), daemon=True).start()
     threading.Thread(target=dnn_loop, args=(angle,), daemon=True).start()
@@ -112,13 +113,25 @@ try:
             # Extract just the box coordinates for drawing
             boxes_to_draw = [box for box, ts in combined_boxes]
 
-            output_frame = helpers.add_boxes(latest_frame.copy(), boxes_to_draw)
-            rotated_frame = helpers.add_boxes(rotated_frame.copy(), boxes_to_draw, False)
+            detected_haar = helpers.add_boxes(latest_frame.copy(), boxes_to_draw)
+            detected_rotated = helpers.add_boxes(rotated_frame.copy(), boxes_to_draw, False)
             # rotated_frame = cv2.resize(rotated_frame, (0, 0), fx=camera.frame_size[0], fy=camera.frame_size[0])
-            cv2.imshow("Camera (Haar)", output_frame)
-            cv2.imshow("Rotated (Haar)", rotated_frame)
+            # cv2.imshow("Camera (Haar)", output_frame)
+            # cv2.imshow("Rotated (Haar)", rotated_frame)
+            display_frames_in_grid([
+                "Original",
+                "Rotated",
+                "Detected (HAAR & DNN)",
+                "Detected Rotated"
+            ],[
+                latest_frame,
+                rotated_frame,
+                detected_haar,
+                detected_rotated
+            ])
+
             if camera.out_haar != "":
-                camera.out_haar.write(output_frame)
+                camera.out_haar.write(detected_haar)
             else:
                 print("no haar frame found")
 

@@ -3,10 +3,6 @@ import numpy as np
 import os
 import urllib.request
 
-cv2.namedWindow('Camera (DNN)', cv2.WINDOW_NORMAL)
-# cv2.resizeWindow('Camera (DNN)', 400, 450)
-cv2.moveWindow('Camera (DNN)', 0, 0)
-
 def ensure_file(path, url):
     if os.path.exists(path):
         return True

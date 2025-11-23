@@ -6,3 +6,4 @@ notebook
 jupyter
 ipympl
 numba
+screeninfo
