@@ -20,6 +20,7 @@ latest_frame = None
 rotated_frame = None
 processed_frame = None
 stop_flag = False
+angle_to_display = 0
 
 boxes_by_angle = {}
 timestamps_by_angle = {}
@@ -87,6 +88,8 @@ try:
         now = time.time()
         latest_frame = camera.latest_frame
         rotated_frame = camera.rotated_frame
+        angle_to_display = camera.angle_to_display
+        
         if now - last_display >= 1/camera.fps:
             last_display = now
 
@@ -112,12 +115,16 @@ try:
 
             # Extract just the box coordinates for drawing
             boxes_to_draw = [box for box, ts in combined_boxes]
-
             detected_haar = helpers.add_boxes(latest_frame.copy(), boxes_to_draw)
-            detected_rotated = helpers.add_boxes(rotated_frame.copy(), boxes_to_draw, False)
-            # rotated_frame = cv2.resize(rotated_frame, (0, 0), fx=camera.frame_size[0], fy=camera.frame_size[0])
-            # cv2.imshow("Camera (Haar)", output_frame)
-            # cv2.imshow("Rotated (Haar)", rotated_frame)
+            
+            faces_haar = haar_detector.detect_faces(rotated_frame)
+            boxes_haar = helpers.construct_boxes(faces_haar, (angle_to_display,))
+            detected_rotated = helpers.add_boxes(rotated_frame.copy(), boxes_haar, False)
+            
+            # faces_dnn = haar_detector.detect_faces(rotated_frame)
+            # boxes_dnn = helpers.construct_boxes(faces_dnn, (angle_to_display,))
+            # detected_rotated = helpers.add_boxes(detected_rotated.copy(), boxes_dnn, False)
+
             display_frames_in_grid([
                 "Original",
                 "Rotated",

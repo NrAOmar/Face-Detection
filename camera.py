@@ -6,6 +6,7 @@ camera_in_use = 2 # start with camera in the lab
 stop_flag = False
 latest_frame = None
 rotated_frame = None
+angle_to_display = 340
 
 # Open camera (macOS AVFoundation). Try 2 then 1 then 0.
 cap = cv2.VideoCapture(camera_in_use)
@@ -74,11 +75,8 @@ def camera_loop():
     while not stop_flag:
         ret, frame = cap.read()
         if ret:
-            rotated_frame, rotation_matrix = helpers.rotate_image(frame.copy(), 340)        
+            rotated_frame, rotation_matrix = helpers.rotate_image(frame.copy(), angle_to_display)        
             latest_frame = frame.copy()
-
-            # rotated_frame = cv2.resize(rotated_frame, (0, 0), fx=frame_size[0], fy=frame_size[0])
-            # latest_frame = cv2.resize(latest_frame, (0, 0), fx=frame_size[0], fy=frame_size[0])
         else:
             time.sleep(0.001)
 
