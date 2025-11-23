@@ -38,7 +38,7 @@ def haar_loop(angle):
 
         frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
         faces = haar_detector.detect_faces(frame_rotated)
-        boxes = helpers.construct_boxes(faces, (angle,))
+        boxes = helpers.construct_boxes(faces, angle)
 
         # Write results ONLY for this angle
         with lock:
@@ -59,8 +59,10 @@ def dnn_loop(angle):
         tmp_start = time.time()
 
         frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
-        faces, confidence = dnn_detector.detect_faces(frame_rotated)
-        boxes = helpers.construct_boxes(faces, (angle, confidence))
+        faces, conf_list = dnn_detector.detect_faces(frame_rotated)
+        boxes = helpers.construct_boxes(faces, angle, conf_list)
+        print ("boxes for dnn with confidence")
+        print (boxes)
 
         # Write results ONLY for this angle
         with lock:
@@ -116,10 +118,13 @@ try:
 
             # Extract just the box coordinates for drawing
             boxes_to_draw = [box for box, ts in combined_boxes]
+            box_infos = helpers.preprocess_boxes(boxes_to_draw)
+           
+            
             detected_haar = helpers.add_boxes(latest_frame.copy(), boxes_to_draw)
             
             faces_haar = haar_detector.detect_faces(rotated_frame)
-            boxes_haar = helpers.construct_boxes(faces_haar, (angle_to_display,))
+            boxes_haar = helpers.construct_boxes(faces_haar, angle_to_display)
             detected_rotated = helpers.add_boxes(rotated_frame.copy(), boxes_haar, False)
             
             # faces_dnn = haar_detector.detect_faces(rotated_frame)

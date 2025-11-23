@@ -50,6 +50,7 @@ def detect_faces(frame):
     net.setInput(blob)
     detections = net.forward()
     face_list = []    # to store all faces detected by the DNN
+    conf_list = []       # confidence for each face
 
     faces = 0
     # Draw detections
@@ -72,5 +73,6 @@ def detect_faces(frame):
  
             # Store 
             face_list.append((x1, y1, width, height))
+            conf_list.append(conf)
 
-    return face_list, conf
+    return face_list, conf_list
