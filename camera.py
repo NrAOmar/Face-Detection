@@ -75,7 +75,7 @@ def camera_loop():
             latest_frame = frame.copy()
 
             # rotated_frame = cv2.resize(rotated_frame, (0, 0), fx=frame_size[0], fy=frame_size[0])
-            latest_frame = cv2.resize(latest_frame, (0, 0), fx=frame_size[0], fy=frame_size[0])
+            # latest_frame = cv2.resize(latest_frame, (0, 0), fx=frame_size[0], fy=frame_size[0])
         else:
             time.sleep(0.001)
 
