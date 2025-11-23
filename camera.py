@@ -46,7 +46,7 @@ frame_size = get_frame_size()
 # Retrieved 2025-11-22, License - CC BY-SA 2.5
 
 out_frame_size = (int(frame_size[0] * frame_size[1]), 
-             int(frame_size[0] * frame_size[2]))
+                  int(frame_size[0] * frame_size[2]))
 
 # Video writer
 out_haar = cv2.VideoWriter(
@@ -60,7 +60,6 @@ out_dnn = cv2.VideoWriter(
     cv2.VideoWriter_fourcc(*'mp4v'),
     fps,
     out_frame_size
-    # (int(scale * frame_width), int(scale * frame_height))
 )
 
 print("Recording... Press 'q' to stop.")
@@ -72,9 +71,11 @@ def camera_loop():
     while not stop_flag:
         ret, frame = cap.read()
         if ret:
-            frame = cv2.resize(frame, (0, 0), fx=frame_size[0], fy=frame_size[0])
+            rotated_frame, rotation_matrix = helpers.rotate_image(frame.copy(), 340)        
             latest_frame = frame.copy()
-            rotated_frame, rotation_matrix = helpers.rotate_image(latest_frame.copy(), 340)        
+
+            # rotated_frame = cv2.resize(rotated_frame, (0, 0), fx=frame_size[0], fy=frame_size[0])
+            latest_frame = cv2.resize(latest_frame, (0, 0), fx=frame_size[0], fy=frame_size[0])
         else:
             time.sleep(0.001)
 

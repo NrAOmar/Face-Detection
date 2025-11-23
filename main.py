@@ -15,44 +15,15 @@ flag_enhancement = False
 flag_lowPassFilter = False
 flag_biometric = False
 
-
-
-
 latest_frame = None
 rotated_frame = None
 processed_frame = None
 stop_flag = False
 
-
-# Model file names
-PROTOTXT = "deploy.prototxt"
-CAFFEMODEL = "res10_300x300_ssd_iter_140000.caffemodel"
-
-# URLs used by the official OpenCV sample
-PROTOTXT_URL = "https://raw.githubusercontent.com/opencv/opencv/master/samples/dnn/face_detector/deploy.prototxt"
-CAFFEMODEL_URL = "https://github.com/opencv/opencv_3rdparty/raw/dnn_samples_face_detector_20170830/res10_300x300_ssd_iter_140000.caffemodel"
-
-# Try to make sure the model files exist (skip if offline and already present)
-have_proto = dnn_detector.ensure_file(PROTOTXT, PROTOTXT_URL)
-have_model = dnn_detector.ensure_file(CAFFEMODEL, CAFFEMODEL_URL)
-
-if not (have_proto and have_model):
-    print("Model files missing. Place deploy.prototxt and the caffemodel next to this script.")
-    # You can still continue if you already have them elsewhere and set absolute paths.
-    # exit()
-
-
-# -------------------------------------------
-# 1) CAMERA THREAD: always fast
-# -------------------------------------------
-
 boxes_by_angle = {}
 timestamps_by_angle = {}
 lock = threading.Lock()
 
-# -------------------------------------------
-# 2) PROCESSING THREAD: heavy operations
-# -------------------------------------------
 def haar_loop(angle):
     global latest_frame, stop_flag
 
@@ -62,15 +33,10 @@ def haar_loop(angle):
             continue
 
         tmp_start = time.time()
-        # frame = latest_frame.copy()
 
-        # -----------------------------
-        # 🔥 Your heavy processing here
-        # -----------------------------
         frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
         faces = haar_detector.detect_faces(frame_rotated)
         boxes = helpers.construct_boxes(faces, (angle,))
-        # -----------------------------
 
         # Write results ONLY for this angle
         with lock:
@@ -78,7 +44,7 @@ def haar_loop(angle):
             timestamps_by_angle[("haar", angle)] = time.time()
         
         tmp_end = time.time()
-        print(f"duration = {tmp_end - tmp_start}")
+        # print(f"duration = {tmp_end - tmp_start}")
 
 def dnn_loop(angle):
     global latest_frame, stop_flag
@@ -89,15 +55,10 @@ def dnn_loop(angle):
             continue
 
         tmp_start = time.time()
-        # frame = latest_frame.copy()
 
-        # -----------------------------
-        # 🔥 Your heavy processing here
-        # -----------------------------
-        frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), camera.frame_size, angle)        
-        faces, confidence = dnn_detector.detect_faces(frame_rotated, (PROTOTXT, CAFFEMODEL))
+        frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
+        faces, confidence = dnn_detector.detect_faces(frame_rotated)
         boxes = helpers.construct_boxes(faces, (angle, confidence))
-        # -----------------------------
 
         # Write results ONLY for this angle
         with lock:
@@ -105,12 +66,8 @@ def dnn_loop(angle):
             timestamps_by_angle[("dnn", angle)] = time.time()
         
         tmp_end = time.time()
-        print(f"duration = {tmp_end - tmp_start}")
+        # print(f"duration = {tmp_end - tmp_start}")
 
-
-# ------------------------------------------------
-# Start background threads
-# ------------------------------------------------
 threads = []
 threading.Thread(target=camera.camera_loop, daemon=True).start()
 # threading.Thread(target=haar_loop, args=(340,), daemon=True).start()
@@ -122,9 +79,6 @@ for angle in range(0, 360, angle_step):
     threading.Thread(target=dnn_loop, args=(angle,), daemon=True).start()
 
 combined_boxes = []
-# ------------------------------------------------
-# 3) DISPLAY LOOP — ALWAYS 20 FPS, NO LAG
-# ------------------------------------------------
 last_display = time.time()
 
 try:
@@ -138,10 +92,6 @@ try:
             if latest_frame is None:
                 continue
 
-           # ----------------------------------------
-            # Decide what to show:
-            # processed frame is valid if < 0.5s old
-            # ----------------------------------------
             new_combined_boxes = []
 
             with lock:
@@ -163,9 +113,10 @@ try:
             boxes_to_draw = [box for box, ts in combined_boxes]
 
             output_frame = helpers.add_boxes(latest_frame.copy(), boxes_to_draw)
-            # rotated_frame = helpers.add_boxes(rotated_frame.copy(), boxes_to_draw, False)
+            rotated_frame = helpers.add_boxes(rotated_frame.copy(), boxes_to_draw, False)
+            # rotated_frame = cv2.resize(rotated_frame, (0, 0), fx=camera.frame_size[0], fy=camera.frame_size[0])
             cv2.imshow("Camera (Haar)", output_frame)
-            # cv2.imshow("Rotated (Haar)", rotated_frame)
+            cv2.imshow("Rotated (Haar)", rotated_frame)
             if camera.out_haar != "":
                 camera.out_haar.write(output_frame)
             else:

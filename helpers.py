@@ -12,7 +12,7 @@ def rotate_points_back(points, M):
     return (M_inv @ pts_homo.T).T
 
 def get_rot_mat(angle, cropping = False):
-    (scale, h, w) = camera.frame_size
+    (scale, w, h) = camera.frame_size
     center = (w // 2, h // 2)
 
     rot_mat = cv2.getRotationMatrix2D(center, angle, scale)
@@ -58,7 +58,6 @@ def add_boxes(frame, boxes, rotate_back=True):
         # rotate corners back
         angle = texts[0]
 
-        print(corners)
         rot_mat, dimensions = get_rot_mat(angle)
         if rotate_back:
             corners = rotate_points_back(corners, rot_mat)
