@@ -74,7 +74,7 @@ threading.Thread(target=camera.camera_loop, daemon=True).start()
 # threading.Thread(target=haar_loop, args=(340,), daemon=True).start()
 # threading.Thread(target=haar_loop, args=(20,), daemon=True).start()
 
-angle_step = 90
+angle_step = 45
 for angle in range(0, 360, angle_step):
     threading.Thread(target=haar_loop, args=(angle,), daemon=True).start()
     threading.Thread(target=dnn_loop, args=(angle,), daemon=True).start()
