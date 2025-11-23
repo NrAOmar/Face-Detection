@@ -113,7 +113,7 @@ def construct_boxes(faces, angle, confidences=None):
 import cv2
 import numpy as np
 
-def add_boxes(frame, boxes, draw_conf=True, color=(0, 255, 0)):
+def add_boxes(frame, boxes, draw_conf=True, color=(0, 255, 0), rotate_back=True):
     """
     Draw simple axis-aligned boxes on the frame.
 
@@ -143,6 +143,20 @@ def add_boxes(frame, boxes, draw_conf=True, color=(0, 255, 0)):
             else:
                 # unexpected format, skip
                 continue
+
+        angles = [member["angle"] for member in b["members"]]
+
+        corners = np.array([
+            [x1, y1],
+            [x2, y1],
+            [x1, y2],
+            [x2, y2],
+        ], dtype=np.float32)
+
+        if rotate_back:
+            for angle in angles:
+                rot_mat, dimensions = get_rot_mat(angle) 
+                corners = rotate_points_back(corners, rot_mat)
 
         # clip to image boundaries and convert to int
         x1 = int(np.clip(x1, 0, W - 1))

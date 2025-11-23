@@ -61,8 +61,6 @@ def dnn_loop(angle):
         frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
         faces, conf_list = dnn_detector.detect_faces(frame_rotated)
         boxes = helpers.construct_boxes(faces, angle, conf_list)
-        print ("boxes for dnn with confidence")
-        print (boxes)
 
         # Write results ONLY for this angle
         with lock:
@@ -123,11 +121,13 @@ try:
             merged_boxes = helpers.filter_boxes_by_confidence(merged_boxes, min_conf=0.6)
            
             
+            # print("merged boxes")
+            # print(merged_boxes)
             detected_haar = helpers.add_boxes(latest_frame.copy(), merged_boxes)
             
-            faces_haar = haar_detector.detect_faces(rotated_frame)
-            boxes_haar = helpers.construct_boxes(faces_haar, angle_to_display)
-            detected_rotated = helpers.add_boxes(rotated_frame.copy(), boxes_haar)
+            # faces_haar = haar_detector.detect_faces(rotated_frame)
+            # boxes_haar = helpers.construct_boxes(faces_haar, angle_to_display)
+            # detected_rotated = helpers.add_boxes(rotated_frame.copy(), boxes_haar)
             
             # faces_dnn = haar_detector.detect_faces(rotated_frame)
             # boxes_dnn = helpers.construct_boxes(faces_dnn, (angle_to_display,))
@@ -137,12 +137,12 @@ try:
                 "Original",
                 "Rotated",
                 "Detected (HAAR & DNN)",
-                "Detected Rotated"
+                # "Detected Rotated"
             ],[
                 latest_frame,
                 rotated_frame,
                 detected_haar,
-                detected_rotated
+                # detected_rotated
             ])
 
             if camera.out_haar != "":
