@@ -72,7 +72,8 @@ def dnn_loop(angle):
 
 threads = []
 threading.Thread(target=camera.camera_loop, daemon=True).start()
-# threading.Thread(target=haar_loop, args=(340,), daemon=True).start()
+# threading.Thread(target=haar_loop, args=(angle_to_display,), daemon=True).start()
+# threading.Thread(target=dnn_loop, args=(angle_to_display,), daemon=True).start()
 # threading.Thread(target=haar_loop, args=(20,), daemon=True).start()
 
 angle_step = 45
