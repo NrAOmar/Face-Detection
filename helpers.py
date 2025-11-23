@@ -67,12 +67,17 @@ def add_boxes(frame, boxes, rotate_back=True):
         xmin, xmax = np.clip([corners[:,0].min(), corners[:,0].max()], 0, camera.frame_size[1]-1).astype(int)
         ymin, ymax = np.clip([corners[:,1].min(), corners[:,1].max()], 0, camera.frame_size[2]-1).astype(int)
         
-        cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
-        cv2.putText(frame, f"{angle}°", (xmin, max(0, ymin+16)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 1)
+        color = (0, 255, 0)
         if len(texts) > 1:
+            color = (255, 0, 0)
+            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
             cv2.putText(frame, f"{texts[1]}", (xmin, max(0, ymin-8)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 1)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+        else:
+            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
+
+        cv2.putText(frame, f"{angle}°", (xmin, max(0, ymin+16)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
     cv2.putText(frame, f"Faces: {len(boxes)}", (10,30),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
