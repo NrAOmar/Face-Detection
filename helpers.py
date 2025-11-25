@@ -115,35 +115,35 @@ def construct_boxes(faces, angle, rot_mat=None, confidences=None):
 
     return boxes
 
-# def add_boxes(frame, boxes, rotate_back=True):
-#     for (corners, texts) in boxes:
-#         # rotate corners back
-#         angle = texts[0]
+def add_boxes_all(frame, boxes, rotate_back=True):
+    for (corners, texts) in boxes:
+        # rotate corners back
+        angle = texts[0]
 
-#         rot_mat, dimensions = get_rot_mat(angle)
-#         if rotate_back:
-#             corners = rotate_points_back(corners, rot_mat)
+        rot_mat, dimensions = get_rot_mat(angle)
+        if rotate_back:
+            corners = rotate_points_back(corners, rot_mat)
 
-#         # fit axis-aligned box
-#         xmin, ymin, xmax, ymax = corners
-#         xmin, xmax = np.clip([corners[:,0].min(), corners[:,0].max()], 0, camera.frame_size[1]-1).astype(int)
-#         ymin, ymax = np.clip([corners[:,1].min(), corners[:,1].max()], 0, camera.frame_size[2]-1).astype(int)
+        # fit axis-aligned box
+        xmin, ymin, xmax, ymax = corners
+        xmin, xmax = np.clip([corners[:,0].min(), corners[:,0].max()], 0, camera.frame_size[1]-1).astype(int)
+        ymin, ymax = np.clip([corners[:,1].min(), corners[:,1].max()], 0, camera.frame_size[2]-1).astype(int)
         
-#         color = (0, 255, 0)
-#         if len(texts) > 1:
-#             color = (255, 0, 0)
-#             cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
-#             cv2.putText(frame, f"{texts[1]}", (xmin, max(0, ymin-8)),
-#                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-#         else:
-#             cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
+        color = (0, 255, 0)
+        if len(texts) > 1:
+            color = (255, 0, 0)
+            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
+            cv2.putText(frame, f"{texts[1]}", (xmin, max(0, ymin-8)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+        else:
+            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
 
-#         cv2.putText(frame, f"{angle}°", (xmin, max(0, ymin+16)),
-#                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+        cv2.putText(frame, f"{angle}°", (xmin, max(0, ymin+16)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
-#     cv2.putText(frame, f"Faces: {len(boxes)}", (10,30),
-#                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
-#     return frame
+    cv2.putText(frame, f"Faces: {len(boxes)}", (10,30),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
+    return frame
  
 
 def add_boxes(frame, boxes, draw_conf=True, color=(0, 255, 0), rotate_back=True):
