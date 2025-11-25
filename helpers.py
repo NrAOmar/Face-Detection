@@ -52,29 +52,64 @@ def rotate_image(img, angle, cropping=False):
 #         boxes.append((corners, texts))
     
 #     return boxes
-def construct_boxes(faces, angle, confidences=None):
+# def construct_boxes(faces, angle, confidences=None):
+#     """
+#     faces: list of (x, y, w, h)
+#     angle: rotation angle used for detection
+#     confidences: list of confidence values, same length as faces, or None
+#     """
+#     boxes = []
+
+#     if confidences is None:
+#         confidences = [None] * len(faces)
+
+#     for (x, y, w, h), conf in zip(faces, confidences):
+#         corners = np.array([
+#             [x    , y    ],
+#             [x + w, y    ],
+#             [x    , y + h],
+#             [x + w, y + h],
+#         ], dtype=np.float32)
+
+#         if conf is None:
+#             meta = (angle,)                 # Haar: only angle
+#         else:
+#             meta = (angle, float(conf))     # DNN: angle + confidence
+
+#         boxes.append((corners, meta))
+
+#     return boxes
+
+def construct_boxes(faces, angle, rot_mat=None, confidences=None):
     """
-    faces: list of (x, y, w, h)
-    angle: rotation angle used for detection
-    confidences: list of confidence values, same length as faces, or None
+    faces: list of (x, y, w, h) in the ROTATED frame
+    angle: rotation angle used
+    rot_mat: 2x3 matrix from get_rot_mat / rotate_image
+    confidences: list of conf values or None
     """
     boxes = []
-
     if confidences is None:
         confidences = [None] * len(faces)
 
     for (x, y, w, h), conf in zip(faces, confidences):
-        corners = np.array([
+        # corners in ROTATED frame
+        corners_rot = np.array([
             [x    , y    ],
             [x + w, y    ],
             [x    , y + h],
             [x + w, y + h],
         ], dtype=np.float32)
 
-        if conf is None:
-            meta = (angle,)                 # Haar: only angle
+        # map back to ORIGINAL frame if we have a rotation matrix
+        if rot_mat is not None:
+            corners = rotate_points_back(corners_rot, rot_mat)
         else:
-            meta = (angle, float(conf))     # DNN: angle + confidence
+            corners = corners_rot
+
+        if conf is None:
+            meta = (angle,)           # Haar
+        else:
+            meta = (angle, float(conf))   # DNN
 
         boxes.append((corners, meta))
 
@@ -142,19 +177,19 @@ def add_boxes(frame, boxes, draw_conf=True, color=(0, 255, 0), rotate_back=True)
                 # unexpected format, skip
                 continue
 
-        angles = [member["angle"] for member in b["members"]]
+        # angles = [member["angle"] for member in b["members"]]
 
-        corners = np.array([
-            [x1, y1],
-            [x2, y1],
-            [x1, y2],
-            [x2, y2],
-        ], dtype=np.float32)
+        # corners = np.array([
+        #     [x1, y1],
+        #     [x2, y1],
+        #     [x1, y2],
+        #     [x2, y2],
+        # ], dtype=np.float32)
 
-        if rotate_back:
-            for angle in angles:
-                rot_mat, dimensions = get_rot_mat(angle) 
-                corners = rotate_points_back(corners, rot_mat)
+        # if rotate_back:
+        #     for angle in angles:
+        #         rot_mat, dimensions = get_rot_mat(angle) 
+        #         corners = rotate_points_back(corners, rot_mat)
 
         # clip to image boundaries and convert to int
         x1 = int(np.clip(x1, 0, W - 1))

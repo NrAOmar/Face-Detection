@@ -38,7 +38,7 @@ def haar_loop(angle):
 
         frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
         faces = haar_detector.detect_faces(frame_rotated)
-        boxes = helpers.construct_boxes(faces, angle)
+        boxes = helpers.construct_boxes(faces, angle, rotation_matrix)
 
         # Write results ONLY for this angle
         with lock:
@@ -60,7 +60,7 @@ def dnn_loop(angle):
 
         frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
         faces, conf_list = dnn_detector.detect_faces(frame_rotated)
-        boxes = helpers.construct_boxes(faces, angle, conf_list)
+        boxes = helpers.construct_boxes(faces, angle, rotation_matrix, conf_list)
 
         # Write results ONLY for this angle
         with lock:
@@ -98,7 +98,8 @@ try:
                 continue
 
             new_combined_boxes = []
-
+            print("boxes\n")
+            print(boxes_by_angle)
             with lock:
                 for key, boxes in boxes_by_angle.items():
                     ts = timestamps_by_angle.get(key, 0)
