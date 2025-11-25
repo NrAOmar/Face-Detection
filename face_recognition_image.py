@@ -28,7 +28,7 @@ for filename in os.listdir(known_faces_dir):
 # 2. Load the unknown image
 # ---------------------------------------------------
 
-unknown_image = face_recognition.load_image_file("unknown.jpg")
+unknown_image = face_recognition.load_image_file("sasa.jpg")
 unknown_encodings = face_recognition.face_encodings(unknown_image)
 
 if len(unknown_encodings) == 0:

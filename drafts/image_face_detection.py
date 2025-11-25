@@ -19,10 +19,29 @@ for (x, y, w, h) in face:
 
 img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-import matplotlib.pyplot as plt
+cv2.imshow(img)
+cv2.waitKey(0)
+# import matplotlib.pyplot as plt
 
-plt.figure(figsize=(20,10))
-plt.imshow(img_rgb)
-plt.axis('off')
+# plt.figure(figsize=(20,10))
+# plt.imshow(img_rgb)
+# plt.axis('off')
 
-plt.pause(10)
+# plt.pause(10)
+
+
+
+
+        # img2 = cv2.imread("input_image.jpg")
+        # cv2.waitKey(0)
+        # # cv2.imshow("image", img)
+        # cv2.imshow("image", img2)
+
+
+        img = cv2.imread(img_path)
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        plt.figure(figsize=(20,10))
+        plt.imshow(img_rgb)
+        plt.axis('off')
+
+        plt.pause(10)
