@@ -52,33 +52,33 @@ def rotate_image(img, angle, cropping=False):
 #         boxes.append((corners, texts))
     
 #     return boxes
-# def construct_boxes(faces, angle, confidences=None):
-#     """
-#     faces: list of (x, y, w, h)
-#     angle: rotation angle used for detection
-#     confidences: list of confidence values, same length as faces, or None
-#     """
-#     boxes = []
+def construct_boxes_old(faces, angle, confidences=None):
+    """
+    faces: list of (x, y, w, h)
+    angle: rotation angle used for detection
+    confidences: list of confidence values, same length as faces, or None
+    """
+    boxes = []
 
-#     if confidences is None:
-#         confidences = [None] * len(faces)
+    if confidences is None:
+        confidences = [None] * len(faces)
 
-#     for (x, y, w, h), conf in zip(faces, confidences):
-#         corners = np.array([
-#             [x    , y    ],
-#             [x + w, y    ],
-#             [x    , y + h],
-#             [x + w, y + h],
-#         ], dtype=np.float32)
+    for (x, y, w, h), conf in zip(faces, confidences):
+        corners = np.array([
+            [x    , y    ],
+            [x + w, y    ],
+            [x    , y + h],
+            [x + w, y + h],
+        ], dtype=np.float32)
 
-#         if conf is None:
-#             meta = (angle,)                 # Haar: only angle
-#         else:
-#             meta = (angle, float(conf))     # DNN: angle + confidence
+        if conf is None:
+            meta = (angle,)                 # Haar: only angle
+        else:
+            meta = (angle, float(conf))     # DNN: angle + confidence
 
-#         boxes.append((corners, meta))
+        boxes.append((corners, meta))
 
-#     return boxes
+    return boxes
 
 def construct_boxes(faces, angle, rot_mat=None, confidences=None):
     """

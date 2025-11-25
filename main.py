@@ -17,6 +17,7 @@ flag_lowPassFilter = False
 flag_biometric = False
 
 latest_frame = None
+rotated_boxes = []
 display_rotated_frame = None
 processed_frame = None
 stop_flag = False
@@ -27,7 +28,7 @@ timestamps_by_angle = {}
 lock = threading.Lock()
 
 def haar_loop(angle):
-    global latest_frame, display_rotated_frame, stop_flag
+    global latest_frame, display_rotated_frame, rotated_boxes, stop_flag
 
     while not stop_flag:
         if latest_frame is None:
@@ -42,7 +43,12 @@ def haar_loop(angle):
 
         if (angle == angle_to_display):
             display_rotated_frame = frame_rotated.copy()
+            rotated_boxes = helpers.construct_boxes_old(faces, angle)
+        else:
+            # display_rotated_frame = latest_frame.copy()
+            rotated_boxes = []
 
+        print(rotated_boxes)
         # Write results ONLY for this angle
         with lock:
             boxes_by_angle[("haar", angle)] = boxes
@@ -79,7 +85,7 @@ threading.Thread(target=camera.camera_loop, daemon=True).start()
 # threading.Thread(target=dnn_loop, args=(angle_to_display,), daemon=True).start()
 # threading.Thread(target=haar_loop, args=(20,), daemon=True).start()
 
-angle_step = 20
+angle_step = 90
 for angle in range(0, 360, angle_step):
     threading.Thread(target=haar_loop, args=(angle,), daemon=True).start()
     threading.Thread(target=dnn_loop, args=(angle,), daemon=True).start()
@@ -99,8 +105,6 @@ try:
                 continue
 
             new_combined_boxes = []
-            print("boxes\n")
-            print(boxes_by_angle)
             with lock:
                 for key, boxes in boxes_by_angle.items():
                     ts = timestamps_by_angle.get(key, 0)
@@ -128,13 +132,15 @@ try:
             detected_all = helpers.add_boxes_all(latest_frame.copy(), boxes_to_draw, False)
             detected_final = helpers.add_boxes(latest_frame.copy(), merged_boxes)
             
+
+
             try:
                 if (display_rotated_frame == None):
                     display_rotated_frame = latest_frame.copy()
                 else:
-                    display_rotated_frame = helpers.add_boxes_all(display_rotated_frame.copy(), boxes_to_draw, False)
+                    display_rotated_frame = helpers.add_boxes_all(display_rotated_frame.copy(), rotated_boxes, False)
             except:
-                display_rotated_frame = helpers.add_boxes_all(display_rotated_frame.copy(), boxes_to_draw, False)
+                display_rotated_frame = helpers.add_boxes_all(display_rotated_frame.copy(), rotated_boxes, False)
 
             # faces_haar = haar_detector.detect_faces(rotated_frame)
             # boxes_haar = helpers.construct_boxes(faces_haar, angle_to_display)
@@ -146,13 +152,13 @@ try:
 
             display_frames_in_grid([
                 "Original",
-                # "Rotated",
+                "Rotated",
                 "Detected Combined output",
                 "Detected (HAAR & DNN)",
                 # "Detected Rotated"
             ],[
                 latest_frame,
-                # display_rotated_frame,
+                display_rotated_frame,
                 detected_all,
                 detected_final,
                 # detected_rotated
