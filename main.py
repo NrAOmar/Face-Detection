@@ -28,7 +28,7 @@ timestamps_by_angle = {}
 lock = threading.Lock()
 
 def haar_loop(angle):
-    global latest_frame, display_rotated_frame, rotated_boxes, stop_flag
+    global latest_frame, stop_flag
 
     while not stop_flag:
         if latest_frame is None:
@@ -41,14 +41,6 @@ def haar_loop(angle):
         faces = haar_detector.detect_faces(frame_rotated)
         boxes = helpers.construct_boxes(faces, angle, rotation_matrix)
 
-        if (angle == angle_to_display):
-            display_rotated_frame = frame_rotated.copy()
-            rotated_boxes = helpers.construct_boxes_old(faces, angle)
-        else:
-            # display_rotated_frame = latest_frame.copy()
-            rotated_boxes = []
-
-        print(rotated_boxes)
         # Write results ONLY for this angle
         with lock:
             boxes_by_angle[("haar", angle)] = boxes
@@ -58,7 +50,7 @@ def haar_loop(angle):
         # print(f"duration = {tmp_end - tmp_start}")
 
 def dnn_loop(angle):
-    global latest_frame, stop_flag
+    global latest_frame, display_rotated_frame, rotated_boxes, stop_flag
     
     while not stop_flag:
         if latest_frame is None:
@@ -70,6 +62,14 @@ def dnn_loop(angle):
         frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
         faces, conf_list = dnn_detector.detect_faces(frame_rotated)
         boxes = helpers.construct_boxes(faces, angle, rotation_matrix, conf_list)
+
+        if (angle == angle_to_display):
+            display_rotated_frame = frame_rotated.copy()
+            rotated_boxes = helpers.construct_boxes_old(faces, angle)
+        else:
+            # display_rotated_frame = latest_frame.copy()
+            rotated_boxes = []
+        # print(rotated_boxes)
 
         # Write results ONLY for this angle
         with lock:
@@ -131,8 +131,6 @@ try:
             # print(merged_boxes)
             detected_all = helpers.add_boxes_all(latest_frame.copy(), boxes_to_draw, False)
             detected_final = helpers.add_boxes(latest_frame.copy(), merged_boxes)
-            
-
 
             try:
                 if (display_rotated_frame == None):
