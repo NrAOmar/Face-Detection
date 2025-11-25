@@ -109,9 +109,7 @@ def construct_boxes(faces, angle, confidences=None):
 #     cv2.putText(frame, f"Faces: {len(boxes)}", (10,30),
 #                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
 #     return frame
-
-import cv2
-import numpy as np
+ 
 
 def add_boxes(frame, boxes, draw_conf=True, color=(0, 255, 0), rotate_back=True):
     """
