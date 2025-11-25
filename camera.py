@@ -5,8 +5,6 @@ import time
 camera_in_use = 2 # start with camera in the lab
 stop_flag = False
 latest_frame = None
-rotated_frame = None
-angle_to_display = 340
 
 # Open camera (macOS AVFoundation). Try 2 then 1 then 0.
 cap = cv2.VideoCapture(camera_in_use)
@@ -69,13 +67,12 @@ out_dnn = cv2.VideoWriter(
 print("Recording... Press 'q' to stop.")
 
 def camera_loop():
-    global latest_frame, rotated_frame, stop_flag
+    global latest_frame, stop_flag
     # cap = cv2.VideoCapture(1)
 
     while not stop_flag:
         ret, frame = cap.read()
         if ret:
-            rotated_frame, rotation_matrix = helpers.rotate_image(frame.copy(), angle_to_display)        
             latest_frame = frame.copy()
         else:
             time.sleep(0.001)

@@ -17,17 +17,17 @@ flag_lowPassFilter = False
 flag_biometric = False
 
 latest_frame = None
-rotated_frame = None
+display_rotated_frame = None
 processed_frame = None
 stop_flag = False
-angle_to_display = 0
+angle_to_display = 90
 
 boxes_by_angle = {}
 timestamps_by_angle = {}
 lock = threading.Lock()
 
 def haar_loop(angle):
-    global latest_frame, stop_flag
+    global latest_frame, display_rotated_frame, stop_flag
 
     while not stop_flag:
         if latest_frame is None:
@@ -39,6 +39,9 @@ def haar_loop(angle):
         frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
         faces = haar_detector.detect_faces(frame_rotated)
         boxes = helpers.construct_boxes(faces, angle, rotation_matrix)
+
+        if (angle == angle_to_display):
+            display_rotated_frame = frame_rotated.copy()
 
         # Write results ONLY for this angle
         with lock:
@@ -88,8 +91,6 @@ try:
     while True:
         now = time.time()
         latest_frame = camera.latest_frame
-        rotated_frame = camera.rotated_frame
-        angle_to_display = camera.angle_to_display
         
         if now - last_display >= 1/camera.fps:
             last_display = now
@@ -127,6 +128,14 @@ try:
             detected_all = helpers.add_boxes_all(latest_frame.copy(), boxes_to_draw, False)
             detected_final = helpers.add_boxes(latest_frame.copy(), merged_boxes)
             
+            try:
+                if (display_rotated_frame == None):
+                    display_rotated_frame = latest_frame.copy()
+                else:
+                    display_rotated_frame = helpers.add_boxes_all(display_rotated_frame.copy(), boxes_to_draw, False)
+            except:
+                display_rotated_frame = helpers.add_boxes_all(display_rotated_frame.copy(), boxes_to_draw, False)
+
             # faces_haar = haar_detector.detect_faces(rotated_frame)
             # boxes_haar = helpers.construct_boxes(faces_haar, angle_to_display)
             # detected_rotated = helpers.add_boxes(rotated_frame.copy(), boxes_haar)
@@ -143,7 +152,7 @@ try:
                 # "Detected Rotated"
             ],[
                 latest_frame,
-                rotated_frame,
+                display_rotated_frame,
                 detected_all,
                 detected_final,
                 # detected_rotated
