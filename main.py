@@ -125,7 +125,7 @@ try:
             
             # Get one merged box per face
             merged_boxes = helpers.merge_boxes_with_iou(boxes_to_draw, iou_threshold=0.4)
-            merged_boxes = helpers.filter_boxes_by_confidence(merged_boxes, min_conf=0.4)
+            merged_boxes = helpers.filter_boxes_by_confidence(merged_boxes, min_conf=0.6)
             
             # print("merged boxes")
             # print(merged_boxes)
