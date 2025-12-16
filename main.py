@@ -171,7 +171,7 @@ threading.Thread(target=camera.camera_loop, daemon=True).start()
 # threading.Thread(target=dnn_loop, args=(angle_to_display,), daemon=True).start()
 # threading.Thread(target=haar_loop, args=(20,), daemon=True).start()
 
-threading.Thread(target=load_known_faces, daemon=True).start()
+# threading.Thread(target=load_known_faces, daemon=True).start()
 
 angle_step = 20
 for angle in range(angle_step, 360, angle_step):
@@ -217,7 +217,7 @@ try:
             
             # Get one merged box per face
             merged_boxes = helpers.merge_boxes_with_iou(boxes_to_draw, iou_threshold=0.4)
-            merged_boxes = helpers.filter_boxes_by_confidence(merged_boxes, min_conf=0.6)
+            merged_boxes = helpers.filter_boxes_by_confidence(merged_boxes, min_conf=0.4)
             # print(merged_boxes)
             
             # print("merged boxes")
@@ -245,14 +245,14 @@ try:
                 # "Rotated",
                 # "Detected Combined output",
                 "Detected (HAAR & DNN)",
-                "Face ID",
+                # "Face ID",
                 # "Detected Rotated"
             ],[
                 latest_frame,
                 # display_rotated_frame,
                 # detected_all,
                 detected_final,
-                display_id_frame,
+                # display_id_frame,
                 # detected_rotated
             ])
 
