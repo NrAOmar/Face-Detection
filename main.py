@@ -48,25 +48,31 @@ def load_known_faces():
     known_names = []
     base_path="dataset"
     for person in os.listdir(base_path):
+        print("I am in face_id for loop 1")
         person_path = os.path.join(base_path, person)
         if not os.path.isdir(person_path):
+            print("I am in face_id for loop 2")
             continue
 
+        print("I am in face_id for loop 3")
         for img_name in os.listdir(person_path):
             img_path = os.path.join(person_path, img_name)
             img = cv2.imread(img_path)
+            print("I am in face_id for loop 4")
             if img is None:
                 continue
 
+            print("I am in face_id for loop 5")
             faces = app.get(img)
             if len(faces) > 0:
                 known_embeddings.append(faces[0].embedding.astype(np.float32))
                 known_names.append(person)
+            print("I am in face_id for loop 6")
+
+    if len(known_embeddings) == 0:
+        raise RuntimeError("No known faces loaded. Check your dataset folder and images.")
 
     print(f"Loaded {len(known_embeddings)} known faces")
-
-    # if len(known_embeddings) == 0:
-    #     raise RuntimeError("No known faces loaded. Check your dataset folder and images.")
 
     # Pre-normalize known embeddings for fast cosine
     known_mat = np.stack(known_embeddings, axis=0)
@@ -75,7 +81,7 @@ def load_known_faces():
     last_results = []  # list of (bbox(x1,y1,x2,y2), name, sim)
 
     while not stop_flag:
-        print("I am in face_id loop")
+        print("I am in face_id while loop")
         # Downscale for faster inference
         display_id_frame = latest_frame.copy()
         small = cv2.resize(display_id_frame, (0, 0), fx=SCALE, fy=SCALE)
