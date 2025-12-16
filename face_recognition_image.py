@@ -11,7 +11,7 @@ known_encodings = []
 known_names = []
 
 for filename in os.listdir(known_faces_dir):
-    if filename.endswith((".jpg", ".png", ".jpeg")):
+    if filename.endswith((".jpg", ".png", ".jpeg", ".HEIC")):
         name = os.path.splitext(filename)[0]   # e.g., "mohamed.jpg" → "mohamed"
         img_path = os.path.join(known_faces_dir, filename)
 
@@ -28,7 +28,7 @@ for filename in os.listdir(known_faces_dir):
 # 2. Load the unknown image
 # ---------------------------------------------------
 
-unknown_image = face_recognition.load_image_file("sasa.jpg")
+unknown_image = face_recognition.load_image_file("WhatsApp Image 2025-12-08 at 10.03.22.jpeg")
 unknown_encodings = face_recognition.face_encodings(unknown_image)
 
 if len(unknown_encodings) == 0:

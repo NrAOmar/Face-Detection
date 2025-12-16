@@ -26,6 +26,27 @@ boxes_by_angle = {}
 timestamps_by_angle = {}
 lock = threading.Lock()
 
+def haar(angle):
+    global latest_frame, display_rotated_frame, stop_flag
+    tmp_start = time.time()
+
+    frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
+    faces = haar_detector.detect_faces(frame_rotated)
+    boxes = helpers.construct_boxes(faces, angle, rotation_matrix)
+
+    if (angle == angle_to_display):
+        display_rotated_frame = frame_rotated.copy()
+
+    # Write results ONLY for this angle
+    boxes_by_angle[("haar", angle)] = boxes
+    timestamps_by_angle[("haar", angle)] = time.time()
+    # with lock:
+    #     boxes_by_angle[("haar", angle)] = boxes
+    #     timestamps_by_angle[("haar", angle)] = time.time()
+    
+    tmp_end = time.time()
+    print(f"duration = {tmp_end - tmp_start}")
+
 def haar_loop(angle):
     global latest_frame, display_rotated_frame, stop_flag
 
@@ -34,22 +55,7 @@ def haar_loop(angle):
             time.sleep(0.001)
             continue
 
-        tmp_start = time.time()
-
-        frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
-        faces = haar_detector.detect_faces(frame_rotated)
-        boxes = helpers.construct_boxes(faces, angle, rotation_matrix)
-
-        if (angle == angle_to_display):
-            display_rotated_frame = frame_rotated.copy()
-
-        # Write results ONLY for this angle
-        with lock:
-            boxes_by_angle[("haar", angle)] = boxes
-            timestamps_by_angle[("haar", angle)] = time.time()
-        
-        tmp_end = time.time()
-        # print(f"duration = {tmp_end - tmp_start}")
+        haar(angle)
 
 def dnn_loop(angle):
     global latest_frame, stop_flag
@@ -80,9 +86,10 @@ threading.Thread(target=camera.camera_loop, daemon=True).start()
 # threading.Thread(target=haar_loop, args=(20,), daemon=True).start()
 
 angle_step = 20
-for angle in range(0, 360, angle_step):
+for angle in range(angle_step, 360, angle_step):
     threading.Thread(target=haar_loop, args=(angle,), daemon=True).start()
     threading.Thread(target=dnn_loop, args=(angle,), daemon=True).start()
+    continue
 
 combined_boxes = []
 last_display = time.time()
@@ -92,26 +99,29 @@ try:
         now = time.time()
         latest_frame = camera.latest_frame
         
-        if now - last_display >= 1/camera.fps:
+        # if now - last_display >= 1/camera.fps:
+        if True:
             last_display = now
 
             if latest_frame is None:
                 continue
 
             new_combined_boxes = []
+            print("i am here")
+            # haar(0)
+            # dnn_loop(0)
             print("boxes\n")
-            print(boxes_by_angle)
-            with lock:
-                for key, boxes in boxes_by_angle.items():
-                    ts = timestamps_by_angle.get(key, 0)
-                    if now - ts < 0.5:
-                        # store each box with its timestamp
-                        for box in boxes:
-                            new_combined_boxes.append((box, ts))
+            # print(boxes_by_angle)
+            # with lock:
+            for key, boxes in boxes_by_angle.items():
+                ts = timestamps_by_angle.get(key, 0)
+                if now - ts < 0.5:
+                    # store each box with its timestamp
+                    for box in boxes:
+                        new_combined_boxes.append((box, ts))
 
             # Remove old boxes (older than 0.5s)
             combined_boxes = [(box, ts) for box, ts in combined_boxes if now - ts < 0.2]
-
             # Add new boxes
             combined_boxes.extend(new_combined_boxes)
             # combined_boxes = combined_boxes[-12:]
@@ -122,6 +132,7 @@ try:
             # Get one merged box per face
             merged_boxes = helpers.merge_boxes_with_iou(boxes_to_draw, iou_threshold=0.4)
             merged_boxes = helpers.filter_boxes_by_confidence(merged_boxes, min_conf=0.6)
+            # print(merged_boxes)
             
             # print("merged boxes")
             # print(merged_boxes)
@@ -143,17 +154,16 @@ try:
             # faces_dnn = haar_detector.detect_faces(rotated_frame)
             # boxes_dnn = helpers.construct_boxes(faces_dnn, (angle_to_display,))
             # detected_rotated = helpers.add_boxes(detected_rotated.copy(), boxes_dnn, False)
-
             display_frames_in_grid([
                 "Original",
                 # "Rotated",
-                "Detected Combined output",
+                # "Detected Combined output",
                 "Detected (HAAR & DNN)",
                 # "Detected Rotated"
             ],[
                 latest_frame,
                 # display_rotated_frame,
-                detected_all,
+                # detected_all,
                 detected_final,
                 # detected_rotated
             ])
