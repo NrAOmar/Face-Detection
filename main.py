@@ -7,6 +7,9 @@ import dnn_detector
 from plot_windows import display_frames_in_grid
 import camera
 from camera import stop_flag
+from insightface.app import FaceAnalysis
+import os
+import numpy as np
 
 # Features to enable
 flag_rotation = True
@@ -17,6 +20,7 @@ flag_lowPassFilter = False
 flag_biometric = False
 
 latest_frame = None
+display_id_frame = None
 display_rotated_frame = None
 processed_frame = None
 stop_flag = False
@@ -25,6 +29,82 @@ angle_to_display = 90
 boxes_by_angle = {}
 timestamps_by_angle = {}
 lock = threading.Lock()
+
+
+def load_known_faces():
+    global latest_frame, display_id_frame, stop_flag
+    print("I am in face_id")
+    # ---------- InsightFace ----------
+    app = FaceAnalysis(name="buffalo_l")
+    app.prepare(ctx_id=0, det_size=(320, 320))  # faster than 640
+
+    # ---------- Settings ----------
+    THRESHOLD = 0.38
+    SCALE = 0.5          # 0.5 means run model on half-resolution frame
+    RUN_EVERY = 10       # run detection+recognition every N frames
+
+    # ---------- Load known faces ----------
+    known_embeddings = []
+    known_names = []
+    base_path="dataset"
+    for person in os.listdir(base_path):
+        person_path = os.path.join(base_path, person)
+        if not os.path.isdir(person_path):
+            continue
+
+        for img_name in os.listdir(person_path):
+            img_path = os.path.join(person_path, img_name)
+            img = cv2.imread(img_path)
+            if img is None:
+                continue
+
+            faces = app.get(img)
+            if len(faces) > 0:
+                known_embeddings.append(faces[0].embedding.astype(np.float32))
+                known_names.append(person)
+
+    print(f"Loaded {len(known_embeddings)} known faces")
+
+    # if len(known_embeddings) == 0:
+    #     raise RuntimeError("No known faces loaded. Check your dataset folder and images.")
+
+    # Pre-normalize known embeddings for fast cosine
+    known_mat = np.stack(known_embeddings, axis=0)
+    known_mat /= (np.linalg.norm(known_mat, axis=1, keepdims=True) + 1e-10)
+
+    last_results = []  # list of (bbox(x1,y1,x2,y2), name, sim)
+
+    while not stop_flag:
+        print("I am in face_id loop")
+        # Downscale for faster inference
+        display_id_frame = latest_frame.copy()
+        small = cv2.resize(display_id_frame, (0, 0), fx=SCALE, fy=SCALE)
+        faces = app.get(small)
+
+        results = []
+        for f in faces:
+            emb = f.embedding.astype(np.float32)
+            emb /= (np.linalg.norm(emb) + 1e-10)
+
+            sims = known_mat @ emb
+            best_idx = int(np.argmax(sims))
+            best_sim = float(sims[best_idx])
+
+            name = "Unknown"
+            if best_sim >= THRESHOLD:
+                name = known_names[best_idx]
+
+            # Scale bbox back to original frame coordinates
+            x1, y1, x2, y2 = (f.bbox / SCALE).astype(int)
+            results.append(((x1, y1, x2, y2), name, best_sim))
+
+        last_results = results
+
+    # Draw last results
+    for (x1, y1, x2, y2), name, sim in last_results:
+        cv2.rectangle(display_id_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.putText(display_id_frame, f"{name} {sim:.2f}", (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
 def haar(angle):
     global latest_frame, display_rotated_frame, stop_flag
@@ -45,7 +125,7 @@ def haar(angle):
     #     timestamps_by_angle[("haar", angle)] = time.time()
     
     tmp_end = time.time()
-    print(f"duration = {tmp_end - tmp_start}")
+    # print(f"duration = {tmp_end - tmp_start}")
 
 def haar_loop(angle):
     global latest_frame, display_rotated_frame, stop_flag
@@ -85,6 +165,8 @@ threading.Thread(target=camera.camera_loop, daemon=True).start()
 # threading.Thread(target=dnn_loop, args=(angle_to_display,), daemon=True).start()
 # threading.Thread(target=haar_loop, args=(20,), daemon=True).start()
 
+threading.Thread(target=load_known_faces, daemon=True).start()
+
 angle_step = 20
 for angle in range(angle_step, 360, angle_step):
     threading.Thread(target=haar_loop, args=(angle,), daemon=True).start()
@@ -107,10 +189,8 @@ try:
                 continue
 
             new_combined_boxes = []
-            print("i am here")
             # haar(0)
             # dnn_loop(0)
-            print("boxes\n")
             # print(boxes_by_angle)
             # with lock:
             for key, boxes in boxes_by_angle.items():
@@ -159,12 +239,14 @@ try:
                 # "Rotated",
                 # "Detected Combined output",
                 "Detected (HAAR & DNN)",
+                "Face ID",
                 # "Detected Rotated"
             ],[
                 latest_frame,
                 # display_rotated_frame,
                 # detected_all,
                 detected_final,
+                display_id_frame,
                 # detected_rotated
             ])
 
