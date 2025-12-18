@@ -10,32 +10,32 @@ app.prepare(ctx_id=0, det_size=(320, 320))  # faster than 640
 # ---------- Settings ----------
 THRESHOLD = 0.38
 SCALE = 0.5          # 0.5 means run model on half-resolution frame
-RUN_EVERY = 5       # run detection+recognition every N frames
+RUN_EVERY = 10      # run detection+recognition every N frames
 
 # ---------- Load known faces ----------
 known_embeddings = []
 known_names = []
 
-def load_known_faces(base_path="dataset"):
-    for person in os.listdir(base_path):
-        person_path = os.path.join(base_path, person)
-        if not os.path.isdir(person_path):
+base_path="dataset"
+for person in os.listdir(base_path):
+    person_path = os.path.join(base_path, person)
+    if not os.path.isdir(person_path):
+        continue
+
+    for img_name in os.listdir(person_path):
+        img_path = os.path.join(person_path, img_name)
+        img = cv2.imread(img_path)
+        if img is None:
             continue
 
-        for img_name in os.listdir(person_path):
-            img_path = os.path.join(person_path, img_name)
-            img = cv2.imread(img_path)
-            if img is None:
-                continue
+        faces = app.get(img)
+        if len(faces) > 0:
+            known_embeddings.append(faces[0].embedding.astype(np.float32))
+            known_names.append(person)
 
-            faces = app.get(img)
-            if len(faces) > 0:
-                known_embeddings.append(faces[0].embedding.astype(np.float32))
-                known_names.append(person)
+print(f"Loaded {len(known_embeddings)} known faces")
 
-    print(f"Loaded {len(known_embeddings)} known faces")
-
-load_known_faces()
+# load_known_faces()
 
 if len(known_embeddings) == 0:
     raise RuntimeError("No known faces loaded. Check your dataset folder and images.")

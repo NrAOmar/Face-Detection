@@ -9,6 +9,7 @@ import camera
 from camera import stop_flag
 import numpy as np
 from insightface.app import FaceAnalysis
+from insightface.model_zoo import get_model
 import os
 
 
@@ -31,21 +32,58 @@ boxes_by_angle = {}
 timestamps_by_angle = {}
 lock = threading.Lock()
 
-# active_angles = set([0])         # angles currently enabled
-# search_mode_until = 0.0          # time until which search mode is active
-# last_face_seen = time.time()     # last time we saw at least 1 merged face
 
-# def is_angle_active(angle):
-#     with lock:
-#         return angle in active_angles
+REC_PATH = os.path.join(os.path.expanduser("~"), ".insightface", "models", "buffalo_l", "w600k_r50.onnx")
+rec_model = get_model(REC_PATH)
+rec_model.prepare(ctx_id=0)  # CPU
 
-# def set_active_angles(angles):
-#     with lock:
-#         active_angles.clear()
-#         active_angles.update(angles)
 
 frame_id = 0
 last_labeled = []
+
+def embed_from_box(frame_bgr, box, margin=0.20):
+    x1, y1, x2, y2 = to_xyxy(box)
+
+    w = x2 - x1
+    h = y2 - y1
+    mx = int(w * margin)
+    my = int(h * margin)
+
+    x1 = max(0, x1 - mx)
+    y1 = max(0, y1 - my)
+    x2 = min(frame_bgr.shape[1], x2 + mx)
+    y2 = min(frame_bgr.shape[0], y2 + my)
+
+    crop = frame_bgr[y1:y2, x1:x2]
+    if crop.size == 0:
+        return None
+
+    crop112 = cv2.resize(crop, (112, 112), interpolation=cv2.INTER_AREA)
+
+    feat = rec_model.get_feat(crop112).flatten().astype(np.float32)
+    feat /= (np.linalg.norm(feat) + 1e-10)
+    return feat
+
+
+def identify_boxes_id_only(frame_bgr, merged_boxes, known_mat, known_names, threshold=0.38):
+    labeled = []
+    for mb in merged_boxes:
+        emb = embed_from_box(frame_bgr, mb)
+        if emb is None:
+            continue
+
+        sims = known_mat @ emb
+        best_idx = int(np.argmax(sims))
+        best_sim = float(sims[best_idx])
+
+        name = "Unknown"
+        if best_sim >= threshold:
+            name = known_names[best_idx]
+
+        labeled.append((to_xyxy(mb), name, best_sim))
+    return labeled
+
+
 
 
 def to_xyxy(box):
@@ -82,6 +120,11 @@ def iou(a, b):
 # ---------- InsightFace ----------
 app = FaceAnalysis(name="buffalo_l")
 app.prepare(ctx_id=0, det_size=(320, 320))  # faster than 640
+
+print("has models:", hasattr(app, "models"))
+if hasattr(app, "models"):
+    print("model keys:", app.models.keys())
+
 
 # ---------- Settings ----------
 THRESHOLD = 0.38
@@ -265,16 +308,15 @@ try:
             
             # Get one merged box per face
             merged_boxes = helpers.merge_boxes_with_iou(boxes_to_draw, iou_threshold=0.4)
-            merged_boxes = helpers.filter_boxes_by_confidence(merged_boxes, min_conf=0.6)
+            merged_boxes = helpers.filter_boxes_by_confidence(merged_boxes, min_conf=0.5)
             # if len(merged_boxes) == 0:
             #     print("No merged boxes yet")
             #     continue
             
 
-            if len(merged_boxes) > 0:
+            if merged_boxes:
                 if frame_id % RUN_EVERY == 0:
-                    labeled = identify_merged_boxes(latest_frame, merged_boxes, app, known_mat, known_names,
-                                                sim_threshold=THRESHOLD, iou_threshold=0.20)
+                    labeled = identify_boxes_id_only(latest_frame, merged_boxes, known_mat, known_names, THRESHOLD)
                     last_labeled = labeled
                 else:
                     labeled = last_labeled
@@ -284,7 +326,7 @@ try:
                         
             identified_frame =latest_frame.copy(); 
 
-            for (x1, y1, x2, y2), name, sim, box_iou in labeled:
+            for (x1, y1, x2, y2), name, sim in labeled:
                 cv2.rectangle(identified_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(identified_frame, f"{name} {sim:.2f}", (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
