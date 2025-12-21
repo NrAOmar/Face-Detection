@@ -1,9 +1,26 @@
 import cv2
 import numpy as np
 import camera
+import math
+import mediapipe as mp
+from insightface.model_zoo import get_model
+from insightface.app import FaceAnalysis
+import os
+import dnn_detector
+import time
 
 # frame_dnn_width  = int(cap.get(cv2.CAP_PROP_frame_dnn_WIDTH))
 # frame_dnn_height = int(cap.get(cv2.CAP_PROP_frame_dnn_HEIGHT))
+
+_face_mesh = None
+_rec_model = None
+_app = None
+# ---------- Load known faces ----------
+known_embeddings = []
+known_names = []
+last_good_name = "Unknown"
+last_good_sim = 0.0
+last_good_time = 0.0
 
 def rotate_points_back(points, M):
     M_inv = cv2.invertAffineTransform(M)
@@ -435,3 +452,183 @@ def filter_boxes_by_confidence(merged_boxes, min_conf=0.5):
     merged_boxes: list of dicts (output of fuse_cluster_weighted)
     """
     return [b for b in merged_boxes if float(b.get("conf", 0.0)) >= min_conf]
+
+
+def _get_face_mesh():
+    global _face_mesh
+    if _face_mesh is None:
+        mp_face_mesh = mp.solutions.face_mesh
+        _face_mesh = mp_face_mesh.FaceMesh(
+            static_image_mode=False,
+            max_num_faces=1,
+            refine_landmarks=True,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5,
+        )
+    return _face_mesh
+
+def align_crop_by_eyes(crop_bgr):
+    h, w = crop_bgr.shape[:2]
+    if h == 0 or w == 0:
+        return crop_bgr
+
+    rgb = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
+    face_mesh = _get_face_mesh()
+    res = face_mesh.process(rgb)
+    if not res.multi_face_landmarks:
+        return crop_bgr
+
+    lm = res.multi_face_landmarks[0].landmark
+    left = lm[33]
+    right = lm[263]
+
+    xL, yL = int(left.x * w), int(left.y * h)
+    xR, yR = int(right.x * w), int(right.y * h)
+
+    angle = math.degrees(math.atan2(yR - yL, xR - xL))
+    center = (w // 2, h // 2)
+    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+    aligned = cv2.warpAffine(crop_bgr, M, (w, h), flags=cv2.INTER_LINEAR)
+    return aligned
+
+def to_xyxy(box):
+    # Your merged boxes are dicts with x1,y1,x2,y2
+    if isinstance(box, dict):
+        return int(box["x1"]), int(box["y1"]), int(box["x2"]), int(box["y2"])
+
+    # Fallback for list/tuple/np-array boxes
+    x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
+    return int(x1), int(y1), int(x2), int(y2)
+
+def get_rec_model(ctx_id=0):
+    global _rec_model
+    if _rec_model is None:
+        rec_path = os.path.join(
+            os.path.expanduser("~"),
+            ".insightface", "models", "buffalo_l", "w600k_r50.onnx"
+        )
+        _rec_model = get_model(rec_path)
+        _rec_model.prepare(ctx_id=ctx_id)
+    return _rec_model
+
+def embed_from_box(frame_bgr, box, margin=0.20):
+    x1, y1, x2, y2 = to_xyxy(box)
+
+    w = x2 - x1
+    h = y2 - y1
+    mx = int(w * margin)
+    my = int(h * margin)
+
+    x1 = max(0, x1 - mx)
+    y1 = max(0, y1 - my)
+    x2 = min(frame_bgr.shape[1], x2 + mx)
+    y2 = min(frame_bgr.shape[0], y2 + my)
+
+    crop = frame_bgr[y1:y2, x1:x2]
+    crop = align_crop_by_eyes(crop)
+    if crop.size == 0:
+        return None
+
+    crop112 = cv2.resize(crop, (112, 112), interpolation=cv2.INTER_AREA)
+    rec_model = get_rec_model(ctx_id=0)  # gets cached model
+    feat = rec_model.get_feat(crop112).flatten().astype(np.float32)
+    feat /= (np.linalg.norm(feat) + 1e-10)
+    return feat
+# This function is added to verify the haar with Dnn detection
+def dnn_confirms_box(frame_bgr, box, margin=0.25, conf_thr=0.6):
+    x1, y1, x2, y2 = to_xyxy(box)
+
+    w = x2 - x1
+    h = y2 - y1
+    if w <= 0 or h <= 0:
+        return False
+
+    mx = int(w * margin)
+    my = int(h * margin)
+
+    x1c = max(0, x1 - mx)
+    y1c = max(0, y1 - my)
+    x2c = min(frame_bgr.shape[1], x2 + mx)
+    y2c = min(frame_bgr.shape[0], y2 + my)
+
+    crop = frame_bgr[y1c:y2c, x1c:x2c]
+    if crop.size == 0:
+        return False
+
+    faces, confs = dnn_detector.detect_faces(crop)
+
+    if len(faces) == 0:
+        return False
+
+    return any(c >= conf_thr for c in confs)
+
+def identify_boxes_id_only(frame_bgr, merged_boxes, known_mat, known_names,
+                           threshold=0.38, hold_seconds=1):
+    global last_good_name, last_good_sim, last_good_time
+
+    labeled = []
+    now = time.time()
+
+    for mb in merged_boxes:
+        t0 = time.perf_counter()
+        emb = embed_from_box(frame_bgr, mb)
+        t1 = time.perf_counter()
+        if emb is None:
+            continue
+
+        sims = known_mat @ emb
+        t2 = time.perf_counter()
+        # print("embed:", (t1 - t0) * 1000, "ms  sim:", (t2 - t1) * 1000, "ms")
+
+        best_idx = int(np.argmax(sims))
+        best_sim = float(sims[best_idx])
+
+        # Decide name for THIS frame
+        if best_sim >= threshold:
+            name = known_names[best_idx]
+            # update "last good"
+            last_good_name = name
+            last_good_sim = best_sim
+            last_good_time = now
+        else:
+            # If we recently had a confident name, hold it for a bit
+            if last_good_name != "Unknown" and (now - last_good_time) <= hold_seconds:
+                name = last_good_name
+                # Optional: show the last good sim instead of the low current sim
+                best_sim = float(last_good_sim)
+            else:
+                name = "Unknown"
+
+        labeled.append((to_xyxy(mb), name, best_sim))
+
+    return labeled
+
+def get_face_app(ctx_id=0, det_size=(320, 320), name="buffalo_l"):
+    """
+    Returns a cached InsightFace FaceAnalysis instance.
+    Creates it once, then reuses it.
+    """
+    global _app
+    if _app is None:
+        _app = FaceAnalysis(name=name)
+        _app.prepare(ctx_id=ctx_id, det_size=det_size)
+    return _app
+
+def load_known_faces(base_path="dataset"):
+    for person in os.listdir(base_path):
+        person_path = os.path.join(base_path, person)
+        if not os.path.isdir(person_path):
+            continue
+
+        for img_name in os.listdir(person_path):
+            img_path = os.path.join(person_path, img_name)
+            img = cv2.imread(img_path)
+            if img is None:
+                continue
+            app = get_face_app(ctx_id=0, det_size=(320, 320))
+            faces = app.get(img)
+            if len(faces) > 0:
+                known_embeddings.append(faces[0].embedding.astype(np.float32))
+                known_names.append(person)
+
+    print(f"Loaded {len(known_embeddings)} known faces")

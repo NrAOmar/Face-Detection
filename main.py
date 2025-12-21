@@ -13,6 +13,7 @@ from insightface.model_zoo import get_model
 import os
 import mediapipe as mp
 import math
+from helpers import known_embeddings, known_names
 
 
 # Features to enable
@@ -33,208 +34,9 @@ angle_to_display = 90
 boxes_by_angle = {}
 timestamps_by_angle = {}
 lock = threading.Lock()
-
-
-REC_PATH = os.path.join(os.path.expanduser("~"), ".insightface", "models", "buffalo_l", "w600k_r50.onnx")
-rec_model = get_model(REC_PATH)
-rec_model.prepare(ctx_id=0)  # CPU
-
-mp_face_mesh = mp.solutions.face_mesh
-face_mesh = mp_face_mesh.FaceMesh(
-    static_image_mode=False,
-    max_num_faces=1,
-    refine_landmarks=True,
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5,
-)
-
-last_good_name = "Unknown"
-last_good_sim = 0.0
-last_good_time = 0.0
-
-
-
 frame_id = 0
 last_labeled = []
 
-def align_crop_by_eyes(crop_bgr):
-    h, w = crop_bgr.shape[:2]
-    rgb = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
-    res = face_mesh.process(rgb)
-    if not res.multi_face_landmarks:
-        return crop_bgr  # no landmarks, return as-is
-
-    lm = res.multi_face_landmarks[0].landmark
-
-    # Eye corners indices (common stable points)
-    left = lm[33]   # left eye outer corner
-    right = lm[263] # right eye outer corner
-
-    xL, yL = int(left.x * w), int(left.y * h)
-    xR, yR = int(right.x * w), int(right.y * h)
-
-    angle = math.degrees(math.atan2(yR - yL, xR - xL))  # roll angle
-    center = (w // 2, h // 2)
-    M = cv2.getRotationMatrix2D(center, angle, 1.0)
-    aligned = cv2.warpAffine(crop_bgr, M, (w, h), flags=cv2.INTER_LINEAR)
-    return aligned
-
-# def embed_from_box(frame_bgr, box, margin=0.20):
-#     x1, y1, x2, y2 = to_xyxy(box)
-
-#     w = x2 - x1
-#     h = y2 - y1
-#     mx = int(w * margin)
-#     my = int(h * margin)
-
-#     x1 = max(0, x1 - mx)
-#     y1 = max(0, y1 - my)
-#     x2 = min(frame_bgr.shape[1], x2 + mx)
-#     y2 = min(frame_bgr.shape[0], y2 + my)
-
-#     crop = frame_bgr[y1:y2, x1:x2]
-#     crop = align_crop_by_eyes(crop)
-#     if crop.size == 0:
-#         return None
-
-#     crop112 = cv2.resize(crop, (112, 112), interpolation=cv2.INTER_AREA)
-
-#     feat = rec_model.get_feat(crop112).flatten().astype(np.float32)
-#     feat /= (np.linalg.norm(feat) + 1e-10)
-#     return feat
-
-# This function is added to verify the haar with Dnn detection
-def dnn_confirms_box(frame_bgr, box, margin=0.25, conf_thr=0.6):
-    x1, y1, x2, y2 = to_xyxy(box)
-
-    w = x2 - x1
-    h = y2 - y1
-    if w <= 0 or h <= 0:
-        return False
-
-    mx = int(w * margin)
-    my = int(h * margin)
-
-    x1c = max(0, x1 - mx)
-    y1c = max(0, y1 - my)
-    x2c = min(frame_bgr.shape[1], x2 + mx)
-    y2c = min(frame_bgr.shape[0], y2 + my)
-
-    crop = frame_bgr[y1c:y2c, x1c:x2c]
-    if crop.size == 0:
-        return False
-
-    faces, confs = dnn_detector.detect_faces(crop)
-
-    if len(faces) == 0:
-        return False
-
-    return any(c >= conf_thr for c in confs)
-
-
-
-def embed_from_box(frame_bgr, box, margin=0.20):
-    t0 = time.perf_counter()
-
-    x1, y1, x2, y2 = to_xyxy(box)
-    w = x2 - x1
-    h = y2 - y1
-    mx = int(w * margin)
-    my = int(h * margin)
-
-    x1 = max(0, x1 - mx)
-    y1 = max(0, y1 - my)
-    x2 = min(frame_bgr.shape[1], x2 + mx)
-    y2 = min(frame_bgr.shape[0], y2 + my)
-
-    crop = frame_bgr[y1:y2, x1:x2]
-    if crop.size == 0:
-        return None
-
-    t1 = time.perf_counter()
-    crop = align_crop_by_eyes(crop)
-    t2 = time.perf_counter()
-
-    crop112 = cv2.resize(crop, (112, 112), interpolation=cv2.INTER_AREA)
-    t3 = time.perf_counter()
-
-    feat = rec_model.get_feat(crop112).flatten().astype(np.float32)
-    t4 = time.perf_counter()
-
-    feat /= (np.linalg.norm(feat) + 1e-10)
-
-    # print(
-    #     f"crop:{(t1-t0)*1000:.1f}ms  "
-    #     f"align:{(t2-t1)*1000:.1f}ms  "
-    #     f"resize:{(t3-t2)*1000:.1f}ms  "
-    #     f"feat:{(t4-t3)*1000:.1f}ms"
-    # )
-    return feat
-
-
-
-def identify_boxes_id_only(frame_bgr, merged_boxes, known_mat, known_names,
-                           threshold=0.38, hold_seconds=1):
-    global last_good_name, last_good_sim, last_good_time
-
-    labeled = []
-    now = time.time()
-
-    for mb in merged_boxes:
-        t0 = time.perf_counter()
-        emb = embed_from_box(frame_bgr, mb)
-        t1 = time.perf_counter()
-        if emb is None:
-            continue
-
-        sims = known_mat @ emb
-        t2 = time.perf_counter()
-        # print("embed:", (t1 - t0) * 1000, "ms  sim:", (t2 - t1) * 1000, "ms")
-
-        best_idx = int(np.argmax(sims))
-        best_sim = float(sims[best_idx])
-
-        # Decide name for THIS frame
-        if best_sim >= threshold:
-            name = known_names[best_idx]
-            # update "last good"
-            last_good_name = name
-            last_good_sim = best_sim
-            last_good_time = now
-        else:
-            # If we recently had a confident name, hold it for a bit
-            if last_good_name != "Unknown" and (now - last_good_time) <= hold_seconds:
-                name = last_good_name
-                # Optional: show the last good sim instead of the low current sim
-                best_sim = float(last_good_sim)
-            else:
-                name = "Unknown"
-
-        labeled.append((to_xyxy(mb), name, best_sim))
-
-    return labeled
-
-
-
-
-
-def to_xyxy(box):
-    # Your merged boxes are dicts with x1,y1,x2,y2
-    if isinstance(box, dict):
-        return int(box["x1"]), int(box["y1"]), int(box["x2"]), int(box["y2"])
-
-    # Fallback for list/tuple/np-array boxes
-    x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
-    return int(x1), int(y1), int(x2), int(y2)
-
-
-# ---------- InsightFace ----------
-app = FaceAnalysis(name="buffalo_l")
-app.prepare(ctx_id=0, det_size=(320, 320))  # faster than 640
-
-print("has models:", hasattr(app, "models"))
-if hasattr(app, "models"):
-    print("model keys:", app.models.keys())
 
 
 # ---------- Settings ----------
@@ -243,30 +45,8 @@ SCALE = 0.5          # 0.5 means run model on half-resolution frame
 RUN_EVERY = 3       # run detection+recognition every N frames
 
 
-# ---------- Load known faces ----------
-known_embeddings = []
-known_names = []
 
-def load_known_faces(base_path="dataset"):
-    for person in os.listdir(base_path):
-        person_path = os.path.join(base_path, person)
-        if not os.path.isdir(person_path):
-            continue
-
-        for img_name in os.listdir(person_path):
-            img_path = os.path.join(person_path, img_name)
-            img = cv2.imread(img_path)
-            if img is None:
-                continue
-
-            faces = app.get(img)
-            if len(faces) > 0:
-                known_embeddings.append(faces[0].embedding.astype(np.float32))
-                known_names.append(person)
-
-    print(f"Loaded {len(known_embeddings)} known faces")
-
-load_known_faces()
+helpers.load_known_faces()
 
 if len(known_embeddings) == 0:
     raise RuntimeError("No known faces loaded. Check your dataset folder and images.")
@@ -399,7 +179,7 @@ try:
                 # Haar-only: confidence is basically 0.5
                 if abs(conf - HAAR_CONF) <= CONF_EPS:
                     # Verify using DNN on the crop
-                    if dnn_confirms_box(latest_frame, b, margin=0.25, conf_thr=DNN_VERIFY_THR):
+                    if helpers.dnn_confirms_box(latest_frame, b, margin=0.25, conf_thr=DNN_VERIFY_THR):
                         verified.append(b)
                     else:
                         pass  # discard Haar false positive
@@ -413,7 +193,7 @@ try:
 
             if merged_boxes:
                 if frame_id % RUN_EVERY == 0:
-                    labeled = identify_boxes_id_only(latest_frame, merged_boxes, known_mat, known_names, THRESHOLD,1)
+                    labeled = helpers.identify_boxes_id_only(latest_frame, merged_boxes, known_mat, known_names, THRESHOLD,1)
                     last_labeled = labeled
                 else:
                     labeled = last_labeled
