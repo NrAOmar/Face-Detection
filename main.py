@@ -75,9 +75,35 @@ def align_crop_by_eyes(crop_bgr):
     aligned = cv2.warpAffine(crop_bgr, M, (w, h), flags=cv2.INTER_LINEAR)
     return aligned
 
-def embed_from_box(frame_bgr, box, margin=0.20):
-    x1, y1, x2, y2 = to_xyxy(box)
+# def embed_from_box(frame_bgr, box, margin=0.20):
+#     x1, y1, x2, y2 = to_xyxy(box)
 
+#     w = x2 - x1
+#     h = y2 - y1
+#     mx = int(w * margin)
+#     my = int(h * margin)
+
+#     x1 = max(0, x1 - mx)
+#     y1 = max(0, y1 - my)
+#     x2 = min(frame_bgr.shape[1], x2 + mx)
+#     y2 = min(frame_bgr.shape[0], y2 + my)
+
+#     crop = frame_bgr[y1:y2, x1:x2]
+#     crop = align_crop_by_eyes(crop)
+#     if crop.size == 0:
+#         return None
+
+#     crop112 = cv2.resize(crop, (112, 112), interpolation=cv2.INTER_AREA)
+
+#     feat = rec_model.get_feat(crop112).flatten().astype(np.float32)
+#     feat /= (np.linalg.norm(feat) + 1e-10)
+#     return feat
+
+
+def embed_from_box(frame_bgr, box, margin=0.20):
+    t0 = time.perf_counter()
+
+    x1, y1, x2, y2 = to_xyxy(box)
     w = x2 - x1
     h = y2 - y1
     mx = int(w * margin)
@@ -89,25 +115,43 @@ def embed_from_box(frame_bgr, box, margin=0.20):
     y2 = min(frame_bgr.shape[0], y2 + my)
 
     crop = frame_bgr[y1:y2, x1:x2]
-    crop = align_crop_by_eyes(crop)
     if crop.size == 0:
         return None
 
+    t1 = time.perf_counter()
+    crop = align_crop_by_eyes(crop)
+    t2 = time.perf_counter()
+
     crop112 = cv2.resize(crop, (112, 112), interpolation=cv2.INTER_AREA)
+    t3 = time.perf_counter()
 
     feat = rec_model.get_feat(crop112).flatten().astype(np.float32)
+    t4 = time.perf_counter()
+
     feat /= (np.linalg.norm(feat) + 1e-10)
+
+    print(
+        f"crop:{(t1-t0)*1000:.1f}ms  "
+        f"align:{(t2-t1)*1000:.1f}ms  "
+        f"resize:{(t3-t2)*1000:.1f}ms  "
+        f"feat:{(t4-t3)*1000:.1f}ms"
+    )
     return feat
+
 
 
 def identify_boxes_id_only(frame_bgr, merged_boxes, known_mat, known_names, threshold=0.38):
     labeled = []
     for mb in merged_boxes:
+        t0 = time.perf_counter()
         emb = embed_from_box(frame_bgr, mb)
+        t1 = time.perf_counter()
         if emb is None:
             continue
 
         sims = known_mat @ emb
+        t2 = time.perf_counter()
+        print("embed:", (t1-t0)*1000, "ms  sim:", (t2-t1)*1000, "ms")
         best_idx = int(np.argmax(sims))
         best_sim = float(sims[best_idx])
 
@@ -204,7 +248,7 @@ def haar_loop(angle):
             timestamps_by_angle[("haar", angle)] = time.time()
         
         tmp_end = time.time()
-        # print(f"duration = {tmp_end - tmp_start}")
+        print(angle)
 
 def dnn_loop(angle):
     global latest_frame, display_rotated_frame, rotated_boxes, stop_flag
@@ -238,7 +282,7 @@ def dnn_loop(angle):
             timestamps_by_angle[("dnn", angle)] = time.time()
         
         tmp_end = time.time()
-        # print(f"duration = {tmp_end - tmp_start}")
+        print(angle)
 
 threads = []
 threading.Thread(target=camera.camera_loop, daemon=True).start()
@@ -246,7 +290,7 @@ threading.Thread(target=camera.camera_loop, daemon=True).start()
 # threading.Thread(target=dnn_loop, args=(angle_to_display,), daemon=True).start()
 # threading.Thread(target=haar_loop, args=(20,), daemon=True).start()
 
-angle_step = 90
+angle_step = 360
 for angle in range(0, 360, angle_step):
     threading.Thread(target=haar_loop, args=(angle,), daemon=True).start()
     threading.Thread(target=dnn_loop, args=(angle,), daemon=True).start()
