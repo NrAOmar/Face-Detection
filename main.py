@@ -21,7 +21,7 @@ rotated_boxes = []
 display_rotated_frame = None
 processed_frame = None
 stop_flag = False
-angle_to_display = 90
+angle_to_display = 0
 
 boxes_by_angle = {}
 timestamps_by_angle = {}
@@ -81,14 +81,14 @@ def dnn_loop(angle):
 
 threads = []
 threading.Thread(target=camera.camera_loop, daemon=True).start()
-# threading.Thread(target=haar_loop, args=(angle_to_display,), daemon=True).start()
-# threading.Thread(target=dnn_loop, args=(angle_to_display,), daemon=True).start()
+threading.Thread(target=haar_loop, args=(angle_to_display,), daemon=True).start()
+threading.Thread(target=dnn_loop, args=(angle_to_display,), daemon=True).start()
 # threading.Thread(target=haar_loop, args=(20,), daemon=True).start()
 
-angle_step = 90
-for angle in range(0, 360, angle_step):
-    threading.Thread(target=haar_loop, args=(angle,), daemon=True).start()
-    threading.Thread(target=dnn_loop, args=(angle,), daemon=True).start()
+# angle_step = 360
+# for angle in range(0, 360, angle_step):
+#     threading.Thread(target=haar_loop, args=(angle,), daemon=True).start()
+#     threading.Thread(target=dnn_loop, args=(angle,), daemon=True).start()
 
 combined_boxes = []
 last_display = time.time()
