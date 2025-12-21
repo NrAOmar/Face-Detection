@@ -11,6 +11,8 @@ import numpy as np
 from insightface.app import FaceAnalysis
 from insightface.model_zoo import get_model
 import os
+import mediapipe as mp
+import math
 
 
 # Features to enable
@@ -37,9 +39,41 @@ REC_PATH = os.path.join(os.path.expanduser("~"), ".insightface", "models", "buff
 rec_model = get_model(REC_PATH)
 rec_model.prepare(ctx_id=0)  # CPU
 
+mp_face_mesh = mp.solutions.face_mesh
+face_mesh = mp_face_mesh.FaceMesh(
+    static_image_mode=False,
+    max_num_faces=1,
+    refine_landmarks=True,
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5,
+)
+
+
 
 frame_id = 0
 last_labeled = []
+
+def align_crop_by_eyes(crop_bgr):
+    h, w = crop_bgr.shape[:2]
+    rgb = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
+    res = face_mesh.process(rgb)
+    if not res.multi_face_landmarks:
+        return crop_bgr  # no landmarks, return as-is
+
+    lm = res.multi_face_landmarks[0].landmark
+
+    # Eye corners indices (common stable points)
+    left = lm[33]   # left eye outer corner
+    right = lm[263] # right eye outer corner
+
+    xL, yL = int(left.x * w), int(left.y * h)
+    xR, yR = int(right.x * w), int(right.y * h)
+
+    angle = math.degrees(math.atan2(yR - yL, xR - xL))  # roll angle
+    center = (w // 2, h // 2)
+    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+    aligned = cv2.warpAffine(crop_bgr, M, (w, h), flags=cv2.INTER_LINEAR)
+    return aligned
 
 def embed_from_box(frame_bgr, box, margin=0.20):
     x1, y1, x2, y2 = to_xyxy(box)
@@ -55,6 +89,7 @@ def embed_from_box(frame_bgr, box, margin=0.20):
     y2 = min(frame_bgr.shape[0], y2 + my)
 
     crop = frame_bgr[y1:y2, x1:x2]
+    crop = align_crop_by_eyes(crop)
     if crop.size == 0:
         return None
 
@@ -94,27 +129,6 @@ def to_xyxy(box):
     # Fallback for list/tuple/np-array boxes
     x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
     return int(x1), int(y1), int(x2), int(y2)
-
-def iou(a, b):
-    ax1, ay1, ax2, ay2 = a
-    bx1, by1, bx2, by2 = b
-
-    ix1 = max(ax1, bx1)
-    iy1 = max(ay1, by1)
-    ix2 = min(ax2, bx2)
-    iy2 = min(ay2, by2)
-
-    iw = max(0, ix2 - ix1)
-    ih = max(0, iy2 - iy1)
-    inter = iw * ih
-
-    area_a = max(0, ax2 - ax1) * max(0, ay2 - ay1)
-    area_b = max(0, bx2 - bx1) * max(0, by2 - by1)
-
-    union = area_a + area_b - inter + 1e-10
-    return inter / union
-
-
 
 
 # ---------- InsightFace ----------
@@ -239,43 +253,6 @@ for angle in range(0, 360, angle_step):
 
 combined_boxes = []
 last_display = time.time()
-
-def identify_merged_boxes(frame, merged_boxes, app, known_mat, known_names,
-                          sim_threshold=0.38, iou_threshold=0.20):
-    ins_faces = app.get(frame)  # InsightFace detects + embeddings on full frame
-
-    labeled = []
-    for mb in merged_boxes:
-        mb_xyxy = to_xyxy(mb)
-
-        best_face = None
-        best_iou = 0.0
-        for f in ins_faces:
-            fb = tuple(map(int, f.bbox))  # (x1,y1,x2,y2)
-            s = iou(mb_xyxy, fb)
-            if s > best_iou:
-                best_iou = s
-                best_face = f
-
-        name = "Unknown"
-        best_sim = 0.0
-
-        if best_face is not None and best_iou >= iou_threshold:
-            emb = best_face.embedding.astype(np.float32)
-            emb /= (np.linalg.norm(emb) + 1e-10)
-
-            sims = known_mat @ emb
-            idx = int(np.argmax(sims))
-            best_sim = float(sims[idx])
-
-            if best_sim >= sim_threshold:
-                name = known_names[idx]
-
-        labeled.append((mb_xyxy, name, best_sim, best_iou))
-
-    return labeled
-
-
 try:
     while True:
         now = time.time()
