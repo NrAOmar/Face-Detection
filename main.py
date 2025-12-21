@@ -130,18 +130,23 @@ def embed_from_box(frame_bgr, box, margin=0.20):
 
     feat /= (np.linalg.norm(feat) + 1e-10)
 
-    print(
-        f"crop:{(t1-t0)*1000:.1f}ms  "
-        f"align:{(t2-t1)*1000:.1f}ms  "
-        f"resize:{(t3-t2)*1000:.1f}ms  "
-        f"feat:{(t4-t3)*1000:.1f}ms"
-    )
+    # print(
+    #     f"crop:{(t1-t0)*1000:.1f}ms  "
+    #     f"align:{(t2-t1)*1000:.1f}ms  "
+    #     f"resize:{(t3-t2)*1000:.1f}ms  "
+    #     f"feat:{(t4-t3)*1000:.1f}ms"
+    # )
     return feat
 
 
 
-def identify_boxes_id_only(frame_bgr, merged_boxes, known_mat, known_names, threshold=0.38):
+def identify_boxes_id_only(frame_bgr, merged_boxes, known_mat, known_names,
+                           threshold=0.38, hold_seconds=1):
+    global last_good_name, last_good_sim, last_good_time
+
     labeled = []
+    now = time.time()
+
     for mb in merged_boxes:
         t0 = time.perf_counter()
         emb = embed_from_box(frame_bgr, mb)
@@ -151,16 +156,31 @@ def identify_boxes_id_only(frame_bgr, merged_boxes, known_mat, known_names, thre
 
         sims = known_mat @ emb
         t2 = time.perf_counter()
-        print("embed:", (t1-t0)*1000, "ms  sim:", (t2-t1)*1000, "ms")
+        # print("embed:", (t1 - t0) * 1000, "ms  sim:", (t2 - t1) * 1000, "ms")
+
         best_idx = int(np.argmax(sims))
         best_sim = float(sims[best_idx])
 
-        name = "Unknown"
+        # Decide name for THIS frame
         if best_sim >= threshold:
             name = known_names[best_idx]
+            # update "last good"
+            last_good_name = name
+            last_good_sim = best_sim
+            last_good_time = now
+        else:
+            # If we recently had a confident name, hold it for a bit
+            if last_good_name != "Unknown" and (now - last_good_time) <= hold_seconds:
+                name = last_good_name
+                # Optional: show the last good sim instead of the low current sim
+                best_sim = float(last_good_sim)
+            else:
+                name = "Unknown"
 
         labeled.append((to_xyxy(mb), name, best_sim))
+
     return labeled
+
 
 
 
@@ -248,7 +268,7 @@ def haar_loop(angle):
             timestamps_by_angle[("haar", angle)] = time.time()
         
         tmp_end = time.time()
-        print(angle)
+        # print(angle)
 
 def dnn_loop(angle):
     global latest_frame, display_rotated_frame, rotated_boxes, stop_flag
@@ -282,7 +302,7 @@ def dnn_loop(angle):
             timestamps_by_angle[("dnn", angle)] = time.time()
         
         tmp_end = time.time()
-        print(angle)
+        # print(angle)
 
 threads = []
 threading.Thread(target=camera.camera_loop, daemon=True).start()
