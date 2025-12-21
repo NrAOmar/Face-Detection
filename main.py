@@ -48,6 +48,10 @@ face_mesh = mp_face_mesh.FaceMesh(
     min_tracking_confidence=0.5,
 )
 
+last_good_name = "Unknown"
+last_good_sim = 0.0
+last_good_time = 0.0
+
 
 
 frame_id = 0
@@ -98,6 +102,35 @@ def align_crop_by_eyes(crop_bgr):
 #     feat = rec_model.get_feat(crop112).flatten().astype(np.float32)
 #     feat /= (np.linalg.norm(feat) + 1e-10)
 #     return feat
+
+# This function is added to verify the haar with Dnn detection
+def dnn_confirms_box(frame_bgr, box, margin=0.25, conf_thr=0.6):
+    x1, y1, x2, y2 = to_xyxy(box)
+
+    w = x2 - x1
+    h = y2 - y1
+    if w <= 0 or h <= 0:
+        return False
+
+    mx = int(w * margin)
+    my = int(h * margin)
+
+    x1c = max(0, x1 - mx)
+    y1c = max(0, y1 - my)
+    x2c = min(frame_bgr.shape[1], x2 + mx)
+    y2c = min(frame_bgr.shape[0], y2 + my)
+
+    crop = frame_bgr[y1c:y2c, x1c:x2c]
+    if crop.size == 0:
+        return False
+
+    faces, confs = dnn_detector.detect_faces(crop)
+
+    if len(faces) == 0:
+        return False
+
+    return any(c >= conf_thr for c in confs)
+
 
 
 def embed_from_box(frame_bgr, box, margin=0.20):
@@ -208,6 +241,7 @@ if hasattr(app, "models"):
 THRESHOLD = 0.38
 SCALE = 0.5          # 0.5 means run model on half-resolution frame
 RUN_EVERY = 3       # run detection+recognition every N frames
+
 
 # ---------- Load known faces ----------
 known_embeddings = []
@@ -354,10 +388,32 @@ try:
             #     print("No merged boxes yet")
             #     continue
             
+            HAAR_CONF = 0.5
+            CONF_EPS = 1e-3       # tolerance for float compare
+            DNN_VERIFY_THR = 0.6  # adjust if too strict
+
+            verified = []
+            for b in merged_boxes:
+                conf = float(b.get("confidence", 0.0))
+
+                # Haar-only: confidence is basically 0.5
+                if abs(conf - HAAR_CONF) <= CONF_EPS:
+                    # Verify using DNN on the crop
+                    if dnn_confirms_box(latest_frame, b, margin=0.25, conf_thr=DNN_VERIFY_THR):
+                        verified.append(b)
+                    else:
+                        pass  # discard Haar false positive
+                else:
+                    # DNN or merged with DNN, keep directly
+                    verified.append(b)
+
+            merged_boxes = verified
+
+
 
             if merged_boxes:
                 if frame_id % RUN_EVERY == 0:
-                    labeled = identify_boxes_id_only(latest_frame, merged_boxes, known_mat, known_names, THRESHOLD)
+                    labeled = identify_boxes_id_only(latest_frame, merged_boxes, known_mat, known_names, THRESHOLD,1)
                     last_labeled = labeled
                 else:
                     labeled = last_labeled

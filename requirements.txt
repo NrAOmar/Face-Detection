@@ -8,3 +8,5 @@ ipympl
 numba
 screeninfo
 insightface
+mediapipe
+onnxruntime
