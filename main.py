@@ -42,7 +42,7 @@ last_labeled = []
 # ---------- Settings ----------
 THRESHOLD = 0.38
 SCALE = 0.5          # 0.5 means run model on half-resolution frame
-RUN_EVERY = 3       # run detection+recognition every N frames
+RUN_EVERY =  10    # run detection+recognition every N fram
 
 
 
