@@ -73,7 +73,7 @@ def camera_loop():
     while not stop_flag:
         ret, frame = cap.read()
         if ret:
-            latest_frame = frame.copy()
+            latest_frame =helpers.preprocess_for_detection(frame.copy())
         else:
             time.sleep(0.001)
 

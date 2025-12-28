@@ -632,3 +632,36 @@ def load_known_faces(base_path="dataset"):
                 known_names.append(person)
 
     print(f"Loaded {len(known_embeddings)} known faces")
+
+
+
+    
+def apply_clahe_on_y(bgr, clip=2.0, grid=(8,8)):
+    ycrcb = cv2.cvtColor(bgr, cv2.COLOR_BGR2YCrCb)
+    y, cr, cb = cv2.split(ycrcb)
+
+    clahe = cv2.createCLAHE(clipLimit=clip, tileGridSize=grid)
+    y2 = clahe.apply(y)
+
+    ycrcb2 = cv2.merge((y2, cr, cb))
+    return cv2.cvtColor(ycrcb2, cv2.COLOR_YCrCb2BGR)
+
+def gamma_correction_bgr(bgr, gamma=1.2):
+    inv = 1.0 / gamma
+    table = np.array([(i/255.0)**inv * 255 for i in range(256)]).astype(np.uint8)
+    return cv2.LUT(bgr, table)
+
+def preprocess_for_detection(frame_bgr):
+    # 1) CLAHE on luminance
+    det = apply_clahe_on_y(frame_bgr, clip=2.0, grid=(8,8))
+
+    # 2) Auto-ish gamma based on brightness (simple)
+    gray = cv2.cvtColor(det, cv2.COLOR_BGR2GRAY)
+    mean = gray.mean()
+    gamma = 1.0 if mean > 120 else 1.25   # tweak thresholds if needed
+    det = gamma_correction_bgr(det, gamma=gamma)
+
+    # # 3) Mild blur to reduce noise (good for Haar)
+    # det = cv2.GaussianBlur(det, (3,3), 0)
+
+    return det
