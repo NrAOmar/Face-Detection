@@ -75,6 +75,8 @@ def haar_loop(angle):
         frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
         faces = haar_detector.detect_faces(frame_rotated)
         boxes = helpers.construct_boxes(faces, angle, rotation_matrix)
+        boxes = helpers.dnn_filter_boxes(frame_rotated, boxes, margin=0.25, conf_thr =0.6)
+        # print(boxes)
 
         # Write results ONLY for this angle
         with lock:
@@ -124,7 +126,7 @@ threading.Thread(target=camera.camera_loop, daemon=True).start()
 # threading.Thread(target=dnn_loop, args=(angle_to_display,), daemon=True).start()
 # threading.Thread(target=haar_loop, args=(20,), daemon=True).start()
 
-angle_step = 360
+angle_step = 120
 for angle in range(0, 360, angle_step):
     threading.Thread(target=haar_loop, args=(angle,), daemon=True).start()
     threading.Thread(target=dnn_loop, args=(angle,), daemon=True).start()
@@ -153,6 +155,7 @@ try:
 
             # Remove old boxes (older than 0.5s)
             combined_boxes = [(box, ts) for box, ts in combined_boxes if now - ts < 0.4]
+            # print(combined_boxes)
 
             # Add new boxes
             combined_boxes.extend(new_combined_boxes)
@@ -173,27 +176,35 @@ try:
             DNN_VERIFY_THR = 0.6  # adjust if too strict
 
             verified = []
-            for b in merged_boxes:
-                conf = float(b.get("confidence", 0.0))
+           
 
-                # Haar-only: confidence is basically 0.5
-                if abs(conf - HAAR_CONF) <= CONF_EPS:
-                    # Verify using DNN on the crop
-                    if helpers.dnn_confirms_box(latest_frame, b, margin=0.25, conf_thr=DNN_VERIFY_THR):
-                        verified.append(b)
-                    else:
-                        pass  # discard Haar false positive
-                else:
-                    # DNN or merged with DNN, keep directly
-                    verified.append(b)
+            # for b in merged_boxes:
+            #     print(merged_boxes)
+            #     conf = float(b.get("conf", 0.0))
+            #     print("Yala n2ool bsmellah ")
+            #     print(conf)
+                
+            #     # Haar-only: confidence is basically 0.5
+            #     if abs(conf - HAAR_CONF) <= CONF_EPS:
+            #         print("da5al gowa awl function")
+            #         # Verify using DNN on the crop
+            #         if helpers.dnn_confirms_box(latest_frame.copy(), b, margin=0.25, conf_thr=DNN_VERIFY_THR):
+            #             print("da5al gowa tany functionwl haar got detected")
+            #             verified.append(b)
+            #         else:
+            #             pass  # discard Haar false positive
+            #             print("da5al gowa tany function bas el haar msh detected")
+            #     else:
+            #         # DNN or merged with DNN, keep directly
+            #         verified.append(b)
 
-            merged_boxes = verified
+            # merged_boxes = verified
 
 
-
+            
             if merged_boxes:
                 if frame_id % RUN_EVERY == 0:
-                    labeled = helpers.identify_boxes_id_only(latest_frame, merged_boxes, known_mat, known_names, THRESHOLD,1)
+                    labeled = helpers.identify_boxes_id_only(latest_frame.copy(), merged_boxes, known_mat, known_names, THRESHOLD,1)
                     last_labeled = labeled
                 else:
                     labeled = last_labeled

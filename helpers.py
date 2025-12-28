@@ -535,35 +535,46 @@ def embed_from_box(frame_bgr, box, margin=0.20):
     feat /= (np.linalg.norm(feat) + 1e-10)
     return feat
 # This function is added to verify the haar with Dnn detection
-def dnn_confirms_box(frame_bgr, box, margin=0.25, conf_thr=0.6):
-    x1, y1, x2, y2 = to_xyxy(box)
+def dnn_filter_boxes(frame_bgr, boxes, margin=0.25, conf_thr=0.6):
+    confirmed = []
 
-    w = x2 - x1
-    h = y2 - y1
-    if w <= 0 or h <= 0:
-        return False
+    for det in boxes:
+        box_arr = det[0]      # (4,2)
 
-    mx = int(w * margin)
-    my = int(h * margin)
+        # bbox from points
+        xs = box_arr[:, 0]
+        ys = box_arr[:, 1]
+        x1, y1, x2, y2 = int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
 
-    x1c = max(0, x1 - mx)
-    y1c = max(0, y1 - my)
-    x2c = min(frame_bgr.shape[1], x2 + mx)
-    y2c = min(frame_bgr.shape[0], y2 + my)
+        w = x2 - x1
+        h = y2 - y1
+        if w <= 0 or h <= 0:
+            continue
 
-    crop = frame_bgr[y1c:y2c, x1c:x2c]
-    if crop.size == 0:
-        return False
+        mx = int(w * margin)
+        my = int(h * margin)
 
-    faces, confs = dnn_detector.detect_faces(crop)
+        x1c = max(0, x1 - mx)
+        y1c = max(0, y1 - my)
+        x2c = min(frame_bgr.shape[1], x2 + mx)
+        y2c = min(frame_bgr.shape[0], y2 + my)
 
-    if len(faces) == 0:
-        return False
+        crop = frame_bgr[y1c:y2c, x1c:x2c]
+        if crop.size == 0:
+            continue
 
-    return any(c >= conf_thr for c in confs)
+        faces, confs = dnn_detector.detect_faces(crop)
+    
+
+        # keep this Haar box only if DNN sees a face in the crop confidently
+        if len(faces) > 0 and any(c >= conf_thr for c in confs):
+            confirmed.append(det)
+
+    return confirmed
+
 
 def identify_boxes_id_only(frame_bgr, merged_boxes, known_mat, known_names,
-                           threshold=0.38, hold_seconds=1):
+                           threshold=0.38, hold_seconds=0.5):
     global last_good_name, last_good_sim, last_good_time
 
     labeled = []
