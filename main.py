@@ -75,7 +75,7 @@ def haar_loop(angle):
         frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
         faces = haar_detector.detect_faces(frame_rotated)
         boxes = helpers.construct_boxes(faces, angle, rotation_matrix)
-        boxes = helpers.dnn_filter_boxes(frame_rotated, boxes, margin=0.25, conf_thr =0.6)
+        boxes = helpers.dnn_filter_boxes(latest_frame.copy(), boxes, margin=0.5, conf_thr =0.6)
         # print(boxes)
 
         # Write results ONLY for this angle

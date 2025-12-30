@@ -535,7 +535,7 @@ def embed_from_box(frame_bgr, box, margin=0.20):
     feat /= (np.linalg.norm(feat) + 1e-10)
     return feat
 # This function is added to verify the haar with Dnn detection
-def dnn_filter_boxes(frame_bgr, boxes, margin=0.25, conf_thr=0.6):
+def dnn_filter_boxes(frame_bgr, boxes, margin=0.5, conf_thr=0.6):
     confirmed = []
 
     for det in boxes:
@@ -569,6 +569,8 @@ def dnn_filter_boxes(frame_bgr, boxes, margin=0.25, conf_thr=0.6):
         # keep this Haar box only if DNN sees a face in the crop confidently
         if len(faces) > 0 and any(c >= conf_thr for c in confs):
             confirmed.append(det)
+        if any(c <= conf_thr for c in confs):
+            print("function works")
 
     return confirmed
 
