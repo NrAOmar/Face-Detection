@@ -511,6 +511,23 @@ def get_rec_model(ctx_id=0):
         _rec_model.prepare(ctx_id=ctx_id)
     return _rec_model
 
+def resize_to_112(img):
+    h, w = img.shape[:2]
+    if w < 112 or h < 112:
+        interp = cv2.INTER_LANCZOS4  # or INTER_CUBIC
+    else:
+        interp = cv2.INTER_AREA
+    return cv2.resize(img, (112, 112), interpolation=interp)
+
+def clahe_luma(bgr):
+    ycrcb = cv2.cvtColor(bgr, cv2.COLOR_BGR2YCrCb)
+    y, cr, cb = cv2.split(ycrcb)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    y = clahe.apply(y)
+    out = cv2.merge([y, cr, cb])
+    return cv2.cvtColor(out, cv2.COLOR_YCrCb2BGR)
+
+
 def embed_from_box(frame_bgr, box, margin=0.20):
     x1, y1, x2, y2 = to_xyxy(box)
 
@@ -528,14 +545,15 @@ def embed_from_box(frame_bgr, box, margin=0.20):
     crop = align_crop_by_eyes(crop)
     if crop.size == 0:
         return None
-
-    crop112 = cv2.resize(crop, (112, 112), interpolation=cv2.INTER_AREA)
+    crop = clahe_luma(crop)
+    crop112 = resize_to_112(crop) # This function I use it to make a proper face recognition with out further faces wont be recognized.
     rec_model = get_rec_model(ctx_id=0)  # gets cached model
     feat = rec_model.get_feat(crop112).flatten().astype(np.float32)
     feat /= (np.linalg.norm(feat) + 1e-10)
     return feat
 # This function is added to verify the haar with Dnn detection
-def dnn_filter_boxes(frame_bgr, boxes, margin=0.5, conf_thr=0.6):
+
+def dnn_filter_boxes(frame_bgr, boxes, margin, conf_thr):
     confirmed = []
 
     for det in boxes:
@@ -564,7 +582,7 @@ def dnn_filter_boxes(frame_bgr, boxes, margin=0.5, conf_thr=0.6):
             continue
 
         faces, confs = dnn_detector.detect_faces(crop)
-    
+
 
         # keep this Haar box only if DNN sees a face in the crop confidently
         if len(faces) > 0 and any(c >= conf_thr for c in confs):

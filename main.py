@@ -41,7 +41,7 @@ last_labeled = []
 
 # ---------- Settings ----------
 THRESHOLD = 0.38
-SCALE = 0.5          # 0.5 means run model on half-resolution frame
+SCALE = 1          # 0.5 means run model on half-resolution frame
 RUN_EVERY =  10    # run detection+recognition every N fram
 
 
@@ -75,7 +75,7 @@ def haar_loop(angle):
         frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
         faces = haar_detector.detect_faces(frame_rotated)
         boxes = helpers.construct_boxes(faces, angle, rotation_matrix)
-        boxes = helpers.dnn_filter_boxes(latest_frame.copy(), boxes, margin=0.5, conf_thr =0.6)
+        boxes = helpers.dnn_filter_boxes(latest_frame.copy(), boxes, margin= 0, conf_thr=0.2)
         # print(boxes)
 
         # Write results ONLY for this angle
