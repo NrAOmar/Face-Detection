@@ -10,3 +10,4 @@ screeninfo
 insightface
 mediapipe
 onnxruntime
+realesrgan

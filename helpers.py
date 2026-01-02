@@ -8,6 +8,9 @@ from insightface.app import FaceAnalysis
 import os
 import dnn_detector
 import time
+from realesrgan import RealESRGANer
+from basicsr.archs.rrdbnet_arch import RRDBNet
+
 
 # frame_dnn_width  = int(cap.get(cv2.CAP_PROP_frame_dnn_WIDTH))
 # frame_dnn_height = int(cap.get(cv2.CAP_PROP_frame_dnn_HEIGHT))
@@ -21,6 +24,8 @@ known_names = []
 last_good_name = "Unknown"
 last_good_sim = 0.0
 last_good_time = 0.0
+
+
 
 def rotate_points_back(points, M):
     M_inv = cv2.invertAffineTransform(M)
@@ -515,7 +520,7 @@ def resize_to_112(img):
     h, w = img.shape[:2]
     if w < 112 or h < 112:
         interp = cv2.INTER_LANCZOS4  # or INTER_CUBIC
-        return cv2.resize(img, (112, 112), interpolation=interp)
+        return cv2.resize(img, (112, 112), interpolation=cv2.INTER_CUBIC)
     else:
         return img
    
@@ -527,6 +532,20 @@ def clahe_luma(bgr):
     y = clahe.apply(y)
     out = cv2.merge([y, cr, cb])
     return cv2.cvtColor(out, cv2.COLOR_YCrCb2BGR)
+
+def upscale_bgr(img_bgr, scale=4):
+    model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=scale)
+    upsampler = RealESRGANer(
+        scale=scale,
+        model_path=f"RealESRGAN_x{scale}.pth",   # download weights and put them next to your script
+        model=model,
+        tile=256,
+        tile_pad=10,
+        pre_pad=0,
+        half=False
+    )
+    out, _ = upsampler.enhance(img_bgr, outscale=scale)
+    return out
 
 
 def embed_from_box(frame_bgr, box, margin=0.20):
@@ -543,11 +562,18 @@ def embed_from_box(frame_bgr, box, margin=0.20):
     y2 = min(frame_bgr.shape[0], y2 + my)
 
     crop = frame_bgr[y1:y2, x1:x2]
-    crop = align_crop_by_eyes(crop)
+    crop_normal = align_crop_by_eyes(crop)
     if crop.size == 0:
         return None
-    crop = clahe_luma(crop)
-    crop112 = resize_to_112(crop) # This function I use it to make a proper face recognition with out further faces wont be recognized.
+
+    # crop = clahe_luma(crop_normal)
+    crop11 = resize_to_112(crop_normal) # This function I use it to make a proper face recognition with out further faces wont be recognized.
+    crop112 = upscale_bgr(crop_normal, scale=4)
+
+
+    cv2.imshow("Crop Normal", crop_normal)
+    cv2.imshow("Super Resolution", crop112)
+    cv2.waitKey(1)  # 1 ms so it doesn’t block
     rec_model = get_rec_model(ctx_id=0)  # gets cached model
     feat = rec_model.get_feat(crop112).flatten().astype(np.float32)
     feat /= (np.linalg.norm(feat) + 1e-10)
@@ -581,6 +607,7 @@ def dnn_filter_boxes(frame_bgr, boxes, margin, conf_thr):
         crop = frame_bgr[y1c:y2c, x1c:x2c]
         if crop.size == 0:
             continue
+        crop = resize_to_112(crop)
 
         faces, confs = dnn_detector.detect_faces(crop)
 
