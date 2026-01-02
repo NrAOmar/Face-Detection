@@ -515,14 +515,15 @@ def resize_to_112(img):
     h, w = img.shape[:2]
     if w < 112 or h < 112:
         interp = cv2.INTER_LANCZOS4  # or INTER_CUBIC
+        return cv2.resize(img, (112, 112), interpolation=interp)
     else:
-        interp = cv2.INTER_AREA
-    return cv2.resize(img, (112, 112), interpolation=interp)
+        return img
+   
 
 def clahe_luma(bgr):
     ycrcb = cv2.cvtColor(bgr, cv2.COLOR_BGR2YCrCb)
     y, cr, cb = cv2.split(ycrcb)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4,4))
     y = clahe.apply(y)
     out = cv2.merge([y, cr, cb])
     return cv2.cvtColor(out, cv2.COLOR_YCrCb2BGR)
