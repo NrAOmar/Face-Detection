@@ -11,15 +11,25 @@ import time
 from realesrgan import RealESRGANer
 from basicsr.archs.rrdbnet_arch import RRDBNet
 
-model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4)
-upsampler = RealESRGANer(
-    scale=4,
-    model_path=f"RealESRGAN_x{4}.pth",   # download weights and put them next to your script
-    model=model,
-    tile=256,
+# Path to weights (robust: works no matter where you run from)
+_THIS_DIR = os.path.dirname(__file__)
+MODEL_PATH = os.path.join(_THIS_DIR, "weights", "RealESRGAN_x4plus.pth")
+
+# Create upsampler once
+_model = RRDBNet(
+    num_in_ch=3, num_out_ch=3,
+    num_feat=64, num_block=23,
+    num_grow_ch=32, scale=4
+)
+
+_upsampler = RealESRGANer(
+    scale=4,                    # network scale (x4 model)
+    model_path=MODEL_PATH,      # <- correct file
+    model=_model,
+    tile=256,                   # reduce if RAM is low; increase if GPU
     tile_pad=10,
     pre_pad=0,
-    half=False
+    half=False                  # keep False on CPU
 )
 # frame_dnn_width  = int(cap.get(cv2.CAP_PROP_frame_dnn_WIDTH))
 # frame_dnn_height = int(cap.get(cv2.CAP_PROP_frame_dnn_HEIGHT))
@@ -542,9 +552,9 @@ def clahe_luma(bgr):
     out = cv2.merge([y, cr, cb])
     return cv2.cvtColor(out, cv2.COLOR_YCrCb2BGR)
 
-def upscale_bgr(img_bgr, scale=4):
+def upscale_bgr(img_bgr, scale=2):
 
-    out, _ = upsampler.enhance(img_bgr, outscale=scale)
+    out, _ = _upsampler.enhance(img_bgr, outscale=2)
     return out
 
 
