@@ -8,29 +8,29 @@ from insightface.app import FaceAnalysis
 import os
 import dnn_detector
 import time
-from realesrgan import RealESRGANer
-from basicsr.archs.rrdbnet_arch import RRDBNet
+# from realesrgan import RealESRGANer
+# from basicsr.archs.rrdbnet_arch import RRDBNet
 
-# Path to weights (robust: works no matter where you run from)
-_THIS_DIR = os.path.dirname(__file__)
-MODEL_PATH = os.path.join(_THIS_DIR, "weights", "RealESRGAN_x4plus.pth")
+# # Path to weights (robust: works no matter where you run from)
+# _THIS_DIR = os.path.dirname(__file__)
+# MODEL_PATH = os.path.join(_THIS_DIR, "weights", "RealESRGAN_x4plus.pth")
 
-# Create upsampler once
-_model = RRDBNet(
-    num_in_ch=3, num_out_ch=3,
-    num_feat=64, num_block=23,
-    num_grow_ch=32, scale=4
-)
+# # Create upsampler once
+# _model = RRDBNet(
+#     num_in_ch=3, num_out_ch=3,
+#     num_feat=64, num_block=23,
+#     num_grow_ch=32, scale=4
+# )
 
-_upsampler = RealESRGANer(
-    scale=4,                    # network scale (x4 model)
-    model_path=MODEL_PATH,      # <- correct file
-    model=_model,
-    tile=256,                   # reduce if RAM is low; increase if GPU
-    tile_pad=10,
-    pre_pad=0,
-    half=False                  # keep False on CPU
-)
+# _upsampler = RealESRGANer(
+#     scale=4,                    # network scale (x4 model)
+#     model_path=MODEL_PATH,      # <- correct file
+#     model=_model,
+#     tile=256,                   # reduce if RAM is low; increase if GPU
+#     tile_pad=10,
+#     pre_pad=0,
+#     half=False                  # keep False on CPU
+# )
 # frame_dnn_width  = int(cap.get(cv2.CAP_PROP_frame_dnn_WIDTH))
 # frame_dnn_height = int(cap.get(cv2.CAP_PROP_frame_dnn_HEIGHT))
 
@@ -538,8 +538,8 @@ def get_rec_model(ctx_id=0):
 def resize_to_112(img):
     h, w = img.shape[:2]
     if w < 112 or h < 112:
-        upscale_bgr(img, scale=4)
-        return img
+        interp = cv2.INTER_LANCZOS4  # or INTER_CUBIC
+        return cv2.resize(img, (112, 112), interpolation=interp)
     else:
         return img
    
