@@ -103,12 +103,10 @@ def add_boxes_all(frame, boxes):
         color = (0, 255, 0)
         if len(texts) > 1:
             color = (255, 0, 0)
-            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
             cv2.putText(frame, f"{texts[1]}", (xmin, max(0, ymin-8)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-        else:
-            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
-
+        
+        cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
         cv2.putText(frame, f"{angle}°", (xmin, max(0, ymin+16)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
@@ -119,14 +117,11 @@ def add_boxes_all(frame, boxes):
 
 def add_boxes(frame, boxes):
     for b in boxes:
-
         x1 = b["x1"]
         y1 = b["y1"]
         x2 = b["x2"]
         y2 = b["y2"]
         conf = b.get("conf", None)
-
-        # angles = [member["angle"] for member in b["members"]]
 
         corners = np.array([
             [x1, y1],

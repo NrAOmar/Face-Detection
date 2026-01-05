@@ -16,33 +16,17 @@ def resize_with_aspect_ratio(image, target_w, target_h):
     resized = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
     return resized, new_w, new_h
 
-def display_frames_in_grid(window_names, frames, title_bar_height=29, margin=0):
+def display_frames_in_grid(frames_to_display, title_bar_height=29, margin=0):
     """
     Displays frames in a grid layout with screen fitting and proper handling
     of title bar height so no window goes outside the screen.
     """
-    assert len(window_names) == len(frames)
-
-    # Filter invalid frames
-    valid_pairs = []
-    for name, frame in zip(window_names, frames):
-        if frame is None or frame.size == 0:
-            print(f"[WARNING] Frame for '{name}' is empty. Skipping.")
-        else:
-            valid_pairs.append((name, frame))
-
-    if not valid_pairs:
-        print("No valid frames to display.")
-        return
-
-    window_names, frames = zip(*valid_pairs)
-
     # Screen size
     monitor = get_monitors()[0]
     screen_w, screen_h = monitor.width, monitor.height
 
     # Arrange grid
-    n = len(frames)
+    n = len(frames_to_display)
     cols = math.ceil(math.sqrt(n))
     rows = math.ceil(n / cols)
 
@@ -53,7 +37,11 @@ def display_frames_in_grid(window_names, frames, title_bar_height=29, margin=0):
     win_h = usable_h // rows
     win_w = usable_w // cols
 
-    for i, (name, frame) in enumerate(zip(window_names, frames)):
+    for i, (window_name, frame) in enumerate(frames_to_display):
+        if frame is None or frame.size == 0:
+            print(f"[WARNING] Frame for '{window_name}' is empty. Skipping.")
+            continue
+
         # Resize frame
         resized, rw, rh = resize_with_aspect_ratio(frame, win_w, win_h)
 
@@ -64,7 +52,7 @@ def display_frames_in_grid(window_names, frames, title_bar_height=29, margin=0):
         pos_x = margin + c * (win_w + margin)
         pos_y = margin + r * (win_h + title_bar_height + margin)
 
-        cv2.namedWindow(name, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(name, win_w, win_h)
-        cv2.moveWindow(name, pos_x, pos_y)
-        cv2.imshow(name, resized)
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(window_name, win_w, win_h)
+        cv2.moveWindow(window_name, pos_x, pos_y)
+        cv2.imshow(window_name, resized)

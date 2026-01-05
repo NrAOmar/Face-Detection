@@ -195,10 +195,13 @@ try:
                 cv2.putText(identified_frame, f"{name} {sim:.2f}", (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
         
-        display_frames_in_grid(
-            ["Original", "Rotated", "Detected Combined output", "Detected (HAAR & DNN)", "Identified"],
-            [latest_frame, display_rotated_frame, display_detected_all, display_detected_final, identified_frame]
-        )
+        display_frames_in_grid([
+            ("Original", latest_frame),
+            ("Rotated Example", display_rotated_frame),
+            ("All Detected Boxes", display_detected_all),
+            ("Fusion (HAAR & DNN)", display_detected_final),
+            ("Identified", identified_frame),
+            ])
 
         if camera.out_haar != "":
             camera.out_haar.write(display_detected_final)
