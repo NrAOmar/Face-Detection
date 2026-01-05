@@ -33,7 +33,7 @@ display_detected_all = None
 display_detected_final = None
 identified_frame = None
 
-angle_step = 45
+angle_step = 120
 angle_to_display = angle_step # show first rotation step
 MAX_KEEP_TIME = 0.5
 
@@ -108,7 +108,7 @@ def identify_faces(camera_number):
     last_good_name = "Unknown"
     last_good_sim = 0.0
     last_good_time = 0.0
-    hold_seconds = 0.5 # TODO: what does this do? does the threading take its place?
+    hold_seconds = 0 # TODO: what does this do? does the threading take its place?
     while not camera.stop_flag:
         (latest_frame, fps) = list(caps.values())[camera_number]
         mbs = merged_boxes.copy()
@@ -119,7 +119,7 @@ def identify_faces(camera_number):
 
         now = time.time()
 
-        # labeled_boxes = []
+        labeled_boxes2 = []
         for mb in mbs:
             emb = helpers.embed_from_box(latest_frame.copy(), mb)
             if emb is None:
@@ -145,10 +145,17 @@ def identify_faces(camera_number):
                 else:
                     name = "Unknown"
 
+            labeled_boxes2.append((helpers.to_xyxy(mb), name, best_sim, camera_number)) # TODO: change this to only output the name not the box, then add the name to the merged_boxes somehow
+            while len(labeled_boxes2) > len(mbs):
+                labeled_boxes2.pop(0)
+            
             with lock:
-                labeled_boxes.append((helpers.to_xyxy(mb), name, best_sim, camera_number)) # TODO: change this to only output the name not the box, then add the name to the merged_boxes somehow
-                while len(labeled_boxes) > len(mbs):
-                    labeled_boxes.pop(0)
+                for i, labeled_box in enumerate(labeled_boxes):
+                    if labeled_box[3] == camera_number:
+                        labeled_boxes.pop(i)
+                
+                labeled_boxes.extend(labeled_boxes2.copy())
+            
 
 if not flag_multipleCameras:
     camera.cameras_in_use = 1
@@ -216,7 +223,7 @@ try:
             display_frames_in_grid([
                 ("Original ", i, latest_frame),
                 # ("Rotated Example", i, display_rotated_frame),
-                # ("All Detected Boxes", i, display_detected_all),
+                ("All Detected Boxes", i, display_detected_all),
                 ("Fusion (HAAR & DNN) ", i, display_detected_final),
                 ("Identified ", i, identified_frame),
                 ])
