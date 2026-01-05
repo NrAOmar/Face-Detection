@@ -58,21 +58,7 @@ def rotate_image(img, angle, cropping=False):
     rotated_img = cv2.warpAffine(img, rot_mat, dimensions)
     return rotated_img, rot_mat
 
-# def construct_boxes(faces, texts):
-#     boxes = []
-    
-#     for (x, y, w, h) in faces:
-#         # corners in rotated frame
-#         corners = np.array([
-#             [x  , y  ],
-#             [x+w, y  ],
-#             [x  , y+h],
-#             [x+w, y+h],
-#         ], dtype=np.float32)
-#         boxes.append((corners, texts))
-    
-#     return boxes
-def construct_boxes_old(faces, angle, confidences=None):
+def construct_boxes(faces, angle, confidences=None):
     """
     faces: list of (x, y, w, h)
     angle: rotation angle used for detection
@@ -95,41 +81,6 @@ def construct_boxes_old(faces, angle, confidences=None):
             meta = (angle,)                 # Haar: only angle
         else:
             meta = (angle, float(conf))     # DNN: angle + confidence
-
-        boxes.append((corners, meta))
-
-    return boxes
-
-def construct_boxes(faces, angle, rot_mat=None, confidences=None):
-    """
-    faces: list of (x, y, w, h) in the ROTATED frame
-    angle: rotation angle used
-    rot_mat: 2x3 matrix from get_rot_mat / rotate_image
-    confidences: list of conf values or None
-    """
-    boxes = []
-    if confidences is None:
-        confidences = [None] * len(faces)
-
-    for (x, y, w, h), conf in zip(faces, confidences):
-        # corners in ROTATED frame
-        corners_rot = np.array([
-            [x    , y    ],
-            [x + w, y    ],
-            [x    , y + h],
-            [x + w, y + h],
-        ], dtype=np.float32)
-
-        # map back to ORIGINAL frame if we have a rotation matrix
-        if rot_mat is not None:
-            corners = rotate_points_back(corners_rot, rot_mat)
-        else:
-            corners = corners_rot
-
-        if conf is None:
-            meta = (angle,)           # Haar
-        else:
-            meta = (angle, float(conf))   # DNN
 
         boxes.append((corners, meta))
 
@@ -166,75 +117,43 @@ def add_boxes_all(frame, boxes, rotate_back=True):
     return frame
  
 
-def add_boxes(frame, boxes, draw_conf=True, color=(0, 255, 0), rotate_back=True):
-    """
-    Draw simple axis-aligned boxes on the frame.
-
-    boxes can be:
-      - list of dicts with keys: x1, y1, x2, y2, conf (conf optional)
-      - or list of tuples: (x1, y1, x2, y2) or (x1, y1, x2, y2, conf)
-    """
-    H, W = frame.shape[:2]
-
-    normalized = []
-
-    # Normalize all inputs to (x1, y1, x2, y2, conf_or_None)
+def add_boxes(frame, boxes, rotate_back=True):
     for b in boxes:
-        if isinstance(b, dict):
-            x1 = b["x1"]
-            y1 = b["y1"]
-            x2 = b["x2"]
-            y2 = b["y2"]
-            conf = b.get("conf", None)
-        else:
-            # assume tuple / list
-            if len(b) == 4:
-                x1, y1, x2, y2 = b
-                conf = None
-            elif len(b) == 5:
-                x1, y1, x2, y2, conf = b
-            else:
-                # unexpected format, skip
-                continue
 
-        # angles = [member["angle"] for member in b["members"]]
+        x1 = b["x1"]
+        y1 = b["y1"]
+        x2 = b["x2"]
+        y2 = b["y2"]
+        conf = b.get("conf", None)
 
-        # corners = np.array([
-        #     [x1, y1],
-        #     [x2, y1],
-        #     [x1, y2],
-        #     [x2, y2],
-        # ], dtype=np.float32)
+        angles = [member["angle"] for member in b["members"]]
 
-        # if rotate_back:
-        #     for angle in angles:
-        #         rot_mat, dimensions = get_rot_mat(angle) 
-        #         corners = rotate_points_back(corners, rot_mat)
+        corners = np.array([
+            [x1, y1],
+            [x2, y1],
+            [x1, y2],
+            [x2, y2],
+        ], dtype=np.float32)
+        
+        if rotate_back:
+            for angle in angles:
+                rot_mat, dimensions = get_rot_mat(angle)
+                corners = rotate_points_back(corners, rot_mat)
 
-        # clip to image boundaries and convert to int
-        x1 = int(np.clip(x1, 0, W - 1))
-        x2 = int(np.clip(x2, 0, W - 1))
-        y1 = int(np.clip(y1, 0, H - 1))
-        y2 = int(np.clip(y2, 0, H - 1))
+        # fit axis-aligned box
+        xmin, ymin, xmax, ymax = corners
+        xmin, xmax = np.clip([corners[:,0].min(), corners[:,0].max()], 0, camera.frame_size[1]-1).astype(int)
+        ymin, ymax = np.clip([corners[:,1].min(), corners[:,1].max()], 0, camera.frame_size[2]-1).astype(int)
+        
+        color = (0, 255, 0)
+        cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
 
-        # ensure proper order
-        if x2 < x1:
-            x1, x2 = x2, x1
-        if y2 < y1:
-            y1, y2 = y2, y1
-
-        normalized.append((x1, y1, x2, y2, conf))
-
-    # Draw all boxes
-    for (x1, y1, x2, y2, conf) in normalized:
-        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-
-        if draw_conf and conf is not None:
+        if conf is not None:
             text = f"{conf:.2f}"
-            cv2.putText(frame, text, (x1, max(0, y1 - 8)),
+            cv2.putText(frame, text, (xmin, max(0, ymin - 8)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
     # Faces count
-    cv2.putText(frame, f"Faces: {len(normalized)}", (10, 30),
+    cv2.putText(frame, f"Faces: {len(boxes)}", (10, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
     return frame

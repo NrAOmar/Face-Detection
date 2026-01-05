@@ -32,7 +32,7 @@ display_detected_all = None
 display_detected_final = None
 identified_frame = None
 
-angle_step = 120
+angle_step = 45
 angle_to_display = angle_step # show first rotation step
 MAX_KEEP_TIME = 0.5
 
@@ -69,7 +69,7 @@ def haar_loop(angle):
 
         frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
         faces = haar_detector.detect_faces(frame_rotated)
-        boxes = helpers.construct_boxes(faces, angle, rotation_matrix)
+        boxes = helpers.construct_boxes(faces, angle)
         boxes = helpers.dnn_filter_boxes(latest_frame.copy(), boxes, margin= 0, conf_thr=0.2)
 
         # Write results ONLY for this angle
@@ -86,11 +86,11 @@ def dnn_loop(angle):
 
         frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
         faces, conf_list = dnn_detector.detect_faces(frame_rotated)
-        boxes = helpers.construct_boxes(faces, angle, rotation_matrix, conf_list)
+        boxes = helpers.construct_boxes(faces, angle, conf_list)
 
         if (angle == angle_to_display):
             display_rotated_frame = frame_rotated.copy()
-            rotated_boxes = helpers.construct_boxes_old(faces, angle)
+            rotated_boxes = boxes.copy()
         else:
             rotated_boxes = []
 
@@ -184,9 +184,9 @@ try:
         else:
             merged_boxes = boxes_to_draw
 
-        display_detected_all = helpers.add_boxes_all(latest_frame.copy(), boxes_to_draw, False) # TODO: change to true
-        display_detected_final = helpers.add_boxes(latest_frame.copy(), merged_boxes, False) # TODO: change format of merged_boxes to be same as boxes_to_draw
-        display_rotated_frame = helpers.add_boxes_all(display_rotated_frame, rotated_boxes, False)
+        display_detected_all = helpers.add_boxes_all(latest_frame.copy(), boxes_to_draw)
+        display_detected_final = helpers.add_boxes(latest_frame.copy(), merged_boxes) # TODO: change format of merged_boxes to be same as boxes_to_draw
+        display_rotated_frame = helpers.add_boxes_all(display_rotated_frame, rotated_boxes)
 
         if flag_biometric:
             identified_frame = latest_frame.copy(); 
