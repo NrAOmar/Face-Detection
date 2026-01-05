@@ -90,7 +90,7 @@ def dnn_loop(angle):
 
         if (angle == angle_to_display):
             display_rotated_frame = frame_rotated.copy()
-            rotated_boxes = boxes.copy()
+            rotated_boxes = helpers.construct_boxes(faces, angle, conf_list, False)
         else:
             rotated_boxes = []
 
@@ -180,7 +180,7 @@ try:
         
         if flag_modelsFusion: # Get one merged box per face
             merged_boxes = helpers.merge_boxes_with_iou(boxes_to_draw, iou_threshold=0.4)
-            merged_boxes = helpers.filter_boxes_by_confidence(merged_boxes, min_conf=0.5)
+            merged_boxes = helpers.filter_boxes_by_confidence(merged_boxes, min_conf=0.5) # this still has some redundant boxes specially with more angles
         else:
             merged_boxes = boxes_to_draw
 

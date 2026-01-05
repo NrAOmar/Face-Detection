@@ -58,7 +58,7 @@ def rotate_image(img, angle, cropping=False):
     rotated_img = cv2.warpAffine(img, rot_mat, dimensions)
     return rotated_img, rot_mat
 
-def construct_boxes(faces, angle, confidences=None):
+def construct_boxes(faces, angle, confidences=None, rotate_back=True):
     """
     faces: list of (x, y, w, h)
     angle: rotation angle used for detection
@@ -82,18 +82,18 @@ def construct_boxes(faces, angle, confidences=None):
         else:
             meta = (angle, float(conf))     # DNN: angle + confidence
 
+        if rotate_back:
+            rot_mat, dimensions = get_rot_mat(angle)
+            corners = rotate_points_back(corners, rot_mat)
+
         boxes.append((corners, meta))
 
     return boxes
 
-def add_boxes_all(frame, boxes, rotate_back=True):
+def add_boxes_all(frame, boxes):
     for (corners, texts) in boxes:
         # rotate corners back
         angle = texts[0]
-
-        if rotate_back:
-            rot_mat, dimensions = get_rot_mat(angle)
-            corners = rotate_points_back(corners, rot_mat)
 
         # fit axis-aligned box
         xmin, ymin, xmax, ymax = corners
@@ -117,7 +117,7 @@ def add_boxes_all(frame, boxes, rotate_back=True):
     return frame
  
 
-def add_boxes(frame, boxes, rotate_back=True):
+def add_boxes(frame, boxes):
     for b in boxes:
 
         x1 = b["x1"]
@@ -126,7 +126,7 @@ def add_boxes(frame, boxes, rotate_back=True):
         y2 = b["y2"]
         conf = b.get("conf", None)
 
-        angles = [member["angle"] for member in b["members"]]
+        # angles = [member["angle"] for member in b["members"]]
 
         corners = np.array([
             [x1, y1],
@@ -134,11 +134,6 @@ def add_boxes(frame, boxes, rotate_back=True):
             [x1, y2],
             [x2, y2],
         ], dtype=np.float32)
-        
-        if rotate_back:
-            for angle in angles:
-                rot_mat, dimensions = get_rot_mat(angle)
-                corners = rotate_points_back(corners, rot_mat)
 
         # fit axis-aligned box
         xmin, ymin, xmax, ymax = corners
@@ -157,7 +152,6 @@ def add_boxes(frame, boxes, rotate_back=True):
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
     return frame
-
 
 
 def preprocess_boxes(boxes_to_draw):
