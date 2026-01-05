@@ -38,12 +38,10 @@ frame_id = 0
 last_labeled = []
 
 
-
 # ---------- Settings ----------
 THRESHOLD = 0.38
 SCALE = 1          # 0.5 means run model on half-resolution frame
 RUN_EVERY =  10    # run detection+recognition every N fram
-
 
 
 helpers.load_known_faces()
@@ -60,15 +58,9 @@ def haar_loop(angle):
     global latest_frame, stop_flag
 
     while not stop_flag:
-        # if not is_angle_active(angle):
-        #     time.sleep(0.02)   # small sleep to reduce CPU
-        #     continue
-
         if latest_frame is None:
             time.sleep(0.001)
             continue
-
-       
 
         tmp_start = time.time()
 
@@ -90,10 +82,6 @@ def dnn_loop(angle):
     global latest_frame, display_rotated_frame, rotated_boxes, stop_flag
     
     while not stop_flag:
-        # if not is_angle_active(angle):
-        #     time.sleep(0.02)   # small sleep to reduce CPU
-        #     continue
-
         if latest_frame is None:
             time.sleep(0.001)
             continue
@@ -134,7 +122,7 @@ for angle in range(0, 360, angle_step):
 combined_boxes = []
 last_display = time.time()
 try:
-    while True:
+    while not stop_flag:
         now = time.time()
         latest_frame = camera.latest_frame
         
@@ -176,32 +164,7 @@ try:
             DNN_VERIFY_THR = 0.6  # adjust if too strict
 
             verified = []
-           
 
-            # for b in merged_boxes:
-            #     print(merged_boxes)
-            #     conf = float(b.get("conf", 0.0))
-            #     print("Yala n2ool bsmellah ")
-            #     print(conf)
-                
-            #     # Haar-only: confidence is basically 0.5
-            #     if abs(conf - HAAR_CONF) <= CONF_EPS:
-            #         print("da5al gowa awl function")
-            #         # Verify using DNN on the crop
-            #         if helpers.dnn_confirms_box(latest_frame.copy(), b, margin=0.25, conf_thr=DNN_VERIFY_THR):
-            #             print("da5al gowa tany functionwl haar got detected")
-            #             verified.append(b)
-            #         else:
-            #             pass  # discard Haar false positive
-            #             print("da5al gowa tany function bas el haar msh detected")
-            #     else:
-            #         # DNN or merged with DNN, keep directly
-            #         verified.append(b)
-
-            # merged_boxes = verified
-
-
-            
             if merged_boxes:
                 if frame_id % RUN_EVERY == 0:
                     labeled = helpers.identify_boxes_id_only(latest_frame.copy(), merged_boxes, known_mat, known_names, THRESHOLD,1)
@@ -219,20 +182,6 @@ try:
                 cv2.putText(identified_frame, f"{name} {sim:.2f}", (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-            # if len(merged_boxes) > 0:
-            #     last_face_seen = now
-            #      # Face is present, go back to only angle 0
-            #     if not is_angle_active(0) or len(active_angles) != 1:
-            #         set_active_angles([0])
-            # else:   
-            #     # No face right now
-            #     no_face_time = now - last_face_seen
-
-            #     # If we have not seen a face for 0.2s, enter search mode for 1.0s
-            #     if no_face_time > 0.2 and now > search_mode_until:
-            #         search_mode_until = now + 1.0
-            #         set_active_angles([0, 90, 180, 270])
-            
             # print("merged boxes")
             # print(merged_boxes)
             detected_all = helpers.add_boxes_all(latest_frame.copy(), boxes_to_draw, False)
@@ -265,14 +214,12 @@ try:
                 print("no haar frame found")
 
         if cv2.waitKey(1) & 0xFF == 27:
-            break
+            stop_flag = True
 
         time.sleep(0.001)
-
 except KeyboardInterrupt:
     pass
 
-stop_flag = True
 camera.out_dnn.release()
 camera.out_haar.release()
 cv2.destroyAllWindows()

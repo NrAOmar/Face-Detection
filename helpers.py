@@ -537,9 +537,9 @@ def get_rec_model(ctx_id=0):
 
 def resize_to_112(img):
     h, w = img.shape[:2]
-    if w < 112 or h < 112:
+    if w < 320 or h < 320:
         interp = cv2.INTER_LANCZOS4  # or INTER_CUBIC
-        return cv2.resize(img, (112, 112), interpolation=interp)
+        return cv2.resize(img, (320, 320), interpolation=interp)
     else:
         return img
    

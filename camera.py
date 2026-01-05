@@ -18,19 +18,6 @@ if not cap.isOpened():
 
 
 def get_frame_size():
-    # iPhone Camera
-    # scale = 0.3
-    # frame_width = 1920
-    # frame_height = 1080
-    # if (camera_in_use == 2): # Lab Camera
-    #     scale = 0.5
-    #     frame_width = 1280
-    #     frame_height = 720
-    # elif (camera_in_use == 1): # macOS Camera
-    #     scale = 0.5
-    #     frame_width = 1280
-    #     frame_height = 720
-
     frame_width  = cap.get(cv2.CAP_PROP_FRAME_WIDTH)   # float `width`
     frame_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)  # float `height`
     scale = 1.0

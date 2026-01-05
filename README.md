@@ -1,7 +1,7 @@
 # CRV_Face_Detection
 
 ## TODO
-- add plotting function that plots in a grid
+- ✅ add plotting function that plots in a grid
 - use 2 cameras together
 - add flags that allow us to disable all of these features/improvements like the prof
     - flag for tilting
@@ -16,9 +16,9 @@
     - ✅ get the conrer points of the box
     - ✅ map this center point using the inverse rotation matrix
     - ✅ draw the new box
-    - ❌ Combine all boxes
+    - ✅ Combine all boxes
     - ❌ Fix the problem with the pixelated image
-    - ❌ Use GPU for using multiple cores to process single frame 
+    - ❌ Use multiple threads for operations to reduce delay 
     - ✅ Use image without cropping. 
 
 - call ahmed and ask about biometrics
