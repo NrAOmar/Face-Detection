@@ -8,35 +8,14 @@ from insightface.app import FaceAnalysis
 import os
 import dnn_detector
 import time
-# from realesrgan import RealESRGANer
-# from basicsr.archs.rrdbnet_arch import RRDBNet
 
-# # Path to weights (robust: works no matter where you run from)
-# _THIS_DIR = os.path.dirname(__file__)
-# MODEL_PATH = os.path.join(_THIS_DIR, "weights", "RealESRGAN_x4plus.pth")
-
-# # Create upsampler once
-# _model = RRDBNet(
-#     num_in_ch=3, num_out_ch=3,
-#     num_feat=64, num_block=23,
-#     num_grow_ch=32, scale=4
-# )
-
-# _upsampler = RealESRGANer(
-#     scale=4,                    # network scale (x4 model)
-#     model_path=MODEL_PATH,      # <- correct file
-#     model=_model,
-#     tile=256,                   # reduce if RAM is low; increase if GPU
-#     tile_pad=10,
-#     pre_pad=0,
-#     half=False                  # keep False on CPU
-# )
 # frame_dnn_width  = int(cap.get(cv2.CAP_PROP_frame_dnn_WIDTH))
 # frame_dnn_height = int(cap.get(cv2.CAP_PROP_frame_dnn_HEIGHT))
 
 _face_mesh = None
 _rec_model = None
 _app = None
+
 # ---------- Load known faces ----------
 known_embeddings = []
 known_names = []
@@ -161,8 +140,8 @@ def add_boxes_all(frame, boxes, rotate_back=True):
         # rotate corners back
         angle = texts[0]
 
-        rot_mat, dimensions = get_rot_mat(angle)
         if rotate_back:
+            rot_mat, dimensions = get_rot_mat(angle)
             corners = rotate_points_back(corners, rot_mat)
 
         # fit axis-aligned box
@@ -581,9 +560,9 @@ def embed_from_box(frame_bgr, box, margin=0.20):
     
    
 
-    cv2.imshow("Crop Normal", crop_normal)
-    cv2.imshow("Super Resolution", crop112)
-    cv2.waitKey(1)  # 1 ms so it doesn’t block
+    # cv2.imshow("Crop Normal", crop_normal)
+    # cv2.imshow("Super Resolution", crop112)
+    # cv2.waitKey(1)  # 1 ms so it doesn’t block
     rec_model = get_rec_model(ctx_id=0)  # gets cached model
     feat = rec_model.get_feat(crop112).flatten().astype(np.float32)
     feat /= (np.linalg.norm(feat) + 1e-10)
@@ -629,48 +608,6 @@ def dnn_filter_boxes(frame_bgr, boxes, margin, conf_thr):
             print("function works")
 
     return confirmed
-
-
-def identify_boxes_id_only(frame_bgr, merged_boxes, known_mat, known_names,
-                           threshold=0.38, hold_seconds=0.5):
-    global last_good_name, last_good_sim, last_good_time
-
-    labeled = []
-    now = time.time()
-
-    for mb in merged_boxes:
-        t0 = time.perf_counter()
-        emb = embed_from_box(frame_bgr, mb)
-        t1 = time.perf_counter()
-        if emb is None:
-            continue
-
-        sims = known_mat @ emb
-        t2 = time.perf_counter()
-        # print("embed:", (t1 - t0) * 1000, "ms  sim:", (t2 - t1) * 1000, "ms")
-
-        best_idx = int(np.argmax(sims))
-        best_sim = float(sims[best_idx])
-
-        # Decide name for THIS frame
-        if best_sim >= threshold:
-            name = known_names[best_idx]
-            # update "last good"
-            last_good_name = name
-            last_good_sim = best_sim
-            last_good_time = now
-        else:
-            # If we recently had a confident name, hold it for a bit
-            if last_good_name != "Unknown" and (now - last_good_time) <= hold_seconds:
-                name = last_good_name
-                # Optional: show the last good sim instead of the low current sim
-                best_sim = float(last_good_sim)
-            else:
-                name = "Unknown"
-
-        labeled.append((to_xyxy(mb), name, best_sim))
-
-    return labeled
 
 def get_face_app(ctx_id=0, det_size=(320, 320), name="buffalo_l"):
     """
