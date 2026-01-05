@@ -2,66 +2,49 @@ import cv2
 import helpers
 import time
 
-camera_in_use = 2 # start with camera in the lab
 stop_flag = False
-latest_frame = None
+caps = {}
+cameras_in_use = 3 # start with camera in the lab, then mac, then iphone
+frame_size = None
 
-# Open camera (macOS AVFoundation). Try 2 then 1 then 0.
-cap = cv2.VideoCapture(camera_in_use)
-while not cap.isOpened() and camera_in_use > 0:
-    camera_in_use -= 1
-    cap = cv2.VideoCapture(camera_in_use)
-
-if not cap.isOpened():
-    print("Error: Could not open camera.")
-    exit()
-
-
-def get_frame_size():
+def get_frame_size(cap):
     frame_width  = cap.get(cv2.CAP_PROP_FRAME_WIDTH)   # float `width`
     frame_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)  # float `height`
     scale = 1.0
     return (scale, frame_width, frame_height)
 
-fps = cap.get(cv2.CAP_PROP_FPS)
-if fps == 0 or fps is None:
-    fps = 20.0  # safe fallback
-print(f"Recording at {fps} FPS")
-
-# Get frame_dnn size
-frame_size = get_frame_size()
-# Source - https://stackoverflow.com/a
-# Posted by Hannes Ovrén
-# Retrieved 2025-11-22, License - CC BY-SA 2.5
-
-out_frame_size = (int(frame_size[0] * frame_size[1]), 
-                  int(frame_size[0] * frame_size[2]))
-
-# Video writer
-out_haar = cv2.VideoWriter(
-    'output_haar.mp4',
-    cv2.VideoWriter_fourcc(*'mp4v'),
-    fps,
-    out_frame_size
-)
-out_dnn = cv2.VideoWriter(
-    'output_dnn.mp4',
-    cv2.VideoWriter_fourcc(*'mp4v'),
-    fps,
-    out_frame_size
-)
-
-print("Recording... Press 'q' to stop.")
+def get_fps(cap):
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    if fps == 0 or fps is None:
+        fps = 20.0  # safe fallback
+    # print(f"Camera " + cap + " is recording at {fps} FPS")
+    print(f"Camera is recording at {fps} FPS")
+    return fps
 
 def camera_loop():
-    global latest_frame, stop_flag
-    # cap = cv2.VideoCapture(1)
+    global caps, stop_flag, cameras_in_use, frame_size
+
+    # Open camera (macOS AVFoundation). Try 2 then 1 then 0.
+    for i in range(0, cameras_in_use):
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened():
+            caps[cap] = (None, get_fps(cap))
+            print("Recording... Press 'Esc' to stop.")
+            if i == 0:
+                frame_size = get_frame_size(cap)
+        else:
+            print("Error: Could not open camera " + str(i))
+            cameras_in_use -= 1
+
+    if len(caps) == 0:
+        exit()
 
     while not stop_flag:
-        ret, frame = cap.read()
-        if ret:
-            latest_frame = frame.copy()
-        else:
-            time.sleep(0.001)
+        for cap, values in caps.items():
+            ret, frame = cap.read()
+            if ret:
+                caps[cap] = (frame.copy(), values[1])
+            else:
+                time.sleep(0.001)
 
     cap.release()

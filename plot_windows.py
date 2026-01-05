@@ -1,6 +1,7 @@
 import cv2
 import math
 from screeninfo import get_monitors
+import camera
 
 def resize_with_aspect_ratio(image, target_w, target_h):
     """
@@ -26,7 +27,7 @@ def display_frames_in_grid(frames_to_display, title_bar_height=29, margin=0):
     screen_w, screen_h = monitor.width, monitor.height
 
     # Arrange grid
-    n = len(frames_to_display)
+    n = len(frames_to_display) * camera.cameras_in_use
     cols = math.ceil(math.sqrt(n))
     rows = math.ceil(n / cols)
 
@@ -37,22 +38,22 @@ def display_frames_in_grid(frames_to_display, title_bar_height=29, margin=0):
     win_h = usable_h // rows
     win_w = usable_w // cols
 
-    for i, (window_name, frame) in enumerate(frames_to_display):
+    for window_number, (window_name, camera_number, frame) in enumerate(frames_to_display):
         if frame is None or frame.size == 0:
-            print(f"[WARNING] Frame for '{window_name}' is empty. Skipping.")
+            print(f"[WARNING] Frame for '{window_name}' '{camera_number}' is empty. Skipping.")
             continue
 
         # Resize frame
         resized, rw, rh = resize_with_aspect_ratio(frame, win_w, win_h)
 
-        r = i // cols
-        c = i % cols
+        r = (window_number+camera_number*len(frames_to_display)) // cols
+        c = (window_number+camera_number*len(frames_to_display)) % cols
 
         # Compute safe positions
         pos_x = margin + c * (win_w + margin)
         pos_y = margin + r * (win_h + title_bar_height + margin)
 
-        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(window_name, win_w, win_h)
-        cv2.moveWindow(window_name, pos_x, pos_y)
-        cv2.imshow(window_name, resized)
+        cv2.namedWindow(window_name + str(camera_number), cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(window_name + str(camera_number), win_w, win_h)
+        cv2.moveWindow(window_name + str(camera_number), pos_x, pos_y)
+        cv2.imshow(window_name + str(camera_number), resized)

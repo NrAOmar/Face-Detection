@@ -24,8 +24,9 @@ flag_modelsFusion = True    # TODO: this flag is currently not working for false
 flag_biometric = True
 # flag_enhancement = False # TODO: add enhancement to the input images
 # flag_lowPassFilter = False
+flag_multipleCameras = True
 
-latest_frame = None
+caps = camera.caps
 # processed_frame = None
 display_rotated_frame = None
 display_detected_all = None
@@ -37,6 +38,7 @@ angle_to_display = angle_step # show first rotation step
 MAX_KEEP_TIME = 0.5
 
 labeled_boxes = []
+merged_boxes = []
 rotated_boxes = []
 boxes_by_angle = {}
 
@@ -59,10 +61,11 @@ known_mat = np.stack(known_embeddings).astype(np.float32)
 known_mat /= (np.linalg.norm(known_mat, axis=1, keepdims=True) + 1e-10)
 
 
-def haar_loop(angle):
-    global latest_frame
+def haar_loop(angle, camera_number):
+    global caps
 
     while not camera.stop_flag:
+        (latest_frame, fps) = list(caps.values())[camera_number]
         if latest_frame is None:
             time.sleep(0.001)
             continue
@@ -74,12 +77,13 @@ def haar_loop(angle):
 
         # Write results ONLY for this angle
         with lock:
-            boxes_by_angle[("haar", angle)] = (boxes, time.time())
+            boxes_by_angle[("haar", angle, camera_number)] = (boxes, time.time())
 
-def dnn_loop(angle):
-    global latest_frame, display_rotated_frame, rotated_boxes
+def dnn_loop(angle, camera_number):
+    global caps, display_rotated_frame, rotated_boxes
     
     while not camera.stop_flag:
+        (latest_frame, fps) = list(caps.values())[camera_number]
         if latest_frame is None:
             time.sleep(0.001)
             continue
@@ -88,7 +92,7 @@ def dnn_loop(angle):
         faces, conf_list = dnn_detector.detect_faces(frame_rotated)
         boxes = helpers.construct_boxes(faces, angle, conf_list)
 
-        if (angle == angle_to_display):
+        if (angle == angle_to_display and camera_number == 0):
             display_rotated_frame = frame_rotated.copy()
             rotated_boxes = helpers.construct_boxes(faces, angle, conf_list, False)
         else:
@@ -96,16 +100,19 @@ def dnn_loop(angle):
 
         # Write results ONLY for this angle
         with lock:
-            boxes_by_angle[("dnn", angle)] = (boxes, time.time())
+            boxes_by_angle[("dnn", angle, camera_number)] = (boxes, time.time())
         
-def identify_faces():
-    global latest_frame, merged_boxes, labeled_boxes
+def identify_faces(camera_number):
+    global caps, merged_boxes, labeled_boxes
 
     last_good_name = "Unknown"
     last_good_sim = 0.0
     last_good_time = 0.0
     hold_seconds = 0.5 # TODO: what does this do? does the threading take its place?
     while not camera.stop_flag:
+        (latest_frame, fps) = list(caps.values())[camera_number]
+        mbs = merged_boxes.copy()
+
         if latest_frame is None:
             time.sleep(0.001)
             continue
@@ -113,7 +120,7 @@ def identify_faces():
         now = time.time()
 
         # labeled_boxes = []
-        for mb in merged_boxes:
+        for mb in mbs:
             emb = helpers.embed_from_box(latest_frame.copy(), mb)
             if emb is None:
                 continue
@@ -139,82 +146,88 @@ def identify_faces():
                     name = "Unknown"
 
             with lock:
-                labeled_boxes.append((helpers.to_xyxy(mb), name, best_sim)) # TODO: change this to only output the name not the box, then add the name to the merged_boxes somehow
-                while len(labeled_boxes) > len(merged_boxes):
+                labeled_boxes.append((helpers.to_xyxy(mb), name, best_sim, camera_number)) # TODO: change this to only output the name not the box, then add the name to the merged_boxes somehow
+                while len(labeled_boxes) > len(mbs):
                     labeled_boxes.pop(0)
 
-threading.Thread(target=camera.camera_loop, daemon=True).start()
+if not flag_multipleCameras:
+    camera.cameras_in_use = 1
 
 if not flag_rotation:
     angle_step = 360
 
-for angle in range(0, 360, angle_step):
-    if (flag_haar):
-        threading.Thread(target=haar_loop, args=(angle,), daemon=True).start()
-    if (flag_dnn):
-        threading.Thread(target=dnn_loop, args=(angle,), daemon=True).start()
+threading.Thread(target=camera.camera_loop, daemon=True).start()
 
-if flag_biometric:
-    threading.Thread(target=identify_faces, daemon=True).start() # TODO: change to create a thread for each face
+while camera.cameras_in_use != len(caps):
+    caps = camera.caps
 
-last_display = time.time()
+for camera_number in range(0, camera.cameras_in_use):
+    for angle in range(0, 360, angle_step):
+        if (flag_haar):
+            threading.Thread(target=haar_loop, args=(angle, camera_number), daemon=True).start()
+        if (flag_dnn):
+            threading.Thread(target=dnn_loop, args=(angle, camera_number), daemon=True).start()
+
+    if flag_biometric:
+        threading.Thread(target=identify_faces, args=(camera_number,), daemon=True).start() # TODO: change to create a thread for each face
+
+last_display = [time.time()] * camera.cameras_in_use
 try:
     while not camera.stop_flag:
-        now = time.time()
-        latest_frame = camera.latest_frame
-        
-        if latest_frame is None:
-            continue
+        caps = camera.caps
+        for i, (cap, (latest_frame, fps)) in enumerate(caps.items()):
+            now = time.time()
 
-        if now - last_display < 1/camera.fps:
-            continue
+            if latest_frame is None:
+                continue
 
-        last_display = now
+            if now - last_display[i] < 1/fps:
+                continue
 
-        boxes_to_draw = []
-        with lock:
-            for key, (boxes, ts) in boxes_by_angle.items():
-                if now - ts < MAX_KEEP_TIME:
-                    boxes_by_angle[key] = (boxes, ts)
-                    boxes_to_draw.extend(boxes)
-        
-        if flag_modelsFusion: # Get one merged box per face
-            merged_boxes = helpers.merge_boxes_with_iou(boxes_to_draw, iou_threshold=0.4)
-            merged_boxes = helpers.filter_boxes_by_confidence(merged_boxes, min_conf=0.5) # this still has some redundant boxes specially with more angles
-        else:
-            merged_boxes = boxes_to_draw
+            boxes_to_draw = []
+            with lock:
+                for key, (boxes, ts) in boxes_by_angle.items():
+                    if now - ts < MAX_KEEP_TIME:
+                        boxes_by_angle[key] = (boxes, ts)
 
-        display_detected_all = helpers.add_boxes_all(latest_frame.copy(), boxes_to_draw)
-        display_detected_final = helpers.add_boxes(latest_frame.copy(), merged_boxes) # TODO: change format of merged_boxes to be same as boxes_to_draw
-        display_rotated_frame = helpers.add_boxes_all(display_rotated_frame, rotated_boxes)
+                    if key[2] == i: # only current camera
+                        boxes_to_draw.extend(boxes)
+            
+            if flag_modelsFusion: # Get one merged box per face
+                merged_boxes = helpers.merge_boxes_with_iou(boxes_to_draw, iou_threshold=0.4)
+                merged_boxes = helpers.filter_boxes_by_confidence(merged_boxes, min_conf=0.5) # this still has some redundant boxes specially with more angles
+            else:
+                merged_boxes = boxes_to_draw
 
-        if flag_biometric:
-            identified_frame = latest_frame.copy(); 
-            for (x1, y1, x2, y2), name, sim in labeled_boxes:
-                cv2.rectangle(identified_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.putText(identified_frame, f"{name} {sim:.2f}", (x1, y1 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-        
-        display_frames_in_grid([
-            ("Original", latest_frame),
-            ("Rotated Example", display_rotated_frame),
-            ("All Detected Boxes", display_detected_all),
-            ("Fusion (HAAR & DNN)", display_detected_final),
-            ("Identified", identified_frame),
-            ])
+            display_detected_all = helpers.add_boxes_all(latest_frame.copy(), boxes_to_draw)
+            display_detected_final = helpers.add_boxes(latest_frame.copy(), merged_boxes) # TODO: change format of merged_boxes to be same as boxes_to_draw
+            display_rotated_frame = helpers.add_boxes_all(display_rotated_frame, rotated_boxes)
 
-        if camera.out_haar != "":
-            camera.out_haar.write(display_detected_final)
-        else:
-            print("no haar frame found")
+            if flag_biometric:
+                identified_frame = latest_frame.copy(); 
+                for (x1, y1, x2, y2), name, sim, camera_no in labeled_boxes:
+                    if camera_no != i:
+                        continue
+                    cv2.rectangle(identified_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    cv2.putText(identified_frame, f"{name} {sim:.2f}", (x1, y1 - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+            
+            last_display[i] = now
+            display_frames_in_grid([
+                ("Original ", i, latest_frame),
+                # ("Rotated Example", i, display_rotated_frame),
+                # ("All Detected Boxes", i, display_detected_all),
+                ("Fusion (HAAR & DNN) ", i, display_detected_final),
+                ("Identified ", i, identified_frame),
+                ])
 
-        if cv2.waitKey(1) & 0xFF == 27:
-            camera.stop_flag = True
+            if cv2.waitKey(1) & 0xFF == 27:
+                camera.stop_flag = True
 
         time.sleep(0.001)
 except KeyboardInterrupt:
     pass
 
-camera.out_dnn.release()
-camera.out_haar.release()
+# camera.out_dnn.release()
+# camera.out_haar.release()
 cv2.destroyAllWindows()
