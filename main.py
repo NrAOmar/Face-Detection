@@ -13,11 +13,11 @@ from helpers import known_embeddings, known_names
 
 # Configuration flags
 FLAG_ROTATION = True
-FLAG_HAAR = True
-FLAG_DNN = True
-FLAG_FUSION = True
-FLAG_BIOMETRIC = True
-FLAG_MULTIPLE_CAMERAS = True
+FLAG_HAAR = True # not tested
+FLAG_DNN = True # not tested
+FLAG_FUSION = True # not tested
+FLAG_BIOMETRIC = True # not tested
+FLAG_MULTIPLE_CAMERAS = True # not tested
 
 ANGLE_STEP = 120
 MAX_KEEP_TIME = 0.5
