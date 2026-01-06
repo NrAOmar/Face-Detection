@@ -37,6 +37,10 @@ boxes_by_key = {}
 # camera_id -> list of (xyxy, name, sim)
 labeled_faces = {}
 
+# camera_id -> last frame (shared, read-only)
+latest_frames = {}
+frames_lock = threading.Lock()
+
 
 # =================================================
 # Load known faces
@@ -55,7 +59,9 @@ known_mat /= (np.linalg.norm(known_mat, axis=1, keepdims=True) + 1e-10)
 # =================================================
 def haar_worker(camera_id: int, angle: int):
     while not camera.stop_flag:
-        frame, _ = camera.get_latest_frame(camera_id)
+        with frames_lock:
+            frame = latest_frames.get(camera_id)
+
         if frame is None:
             time.sleep(0.001)
             continue
@@ -70,7 +76,9 @@ def haar_worker(camera_id: int, angle: int):
 
 def dnn_worker(camera_id: int, angle: int):
     while not camera.stop_flag:
-        frame, _ = camera.get_latest_frame(camera_id)
+        with frames_lock:
+            frame = latest_frames.get(camera_id)
+
         if frame is None:
             time.sleep(0.001)
             continue
@@ -87,7 +95,9 @@ def identify_worker(camera_id: int):
     last_results = []
 
     while not camera.stop_flag:
-        frame, _ = camera.get_latest_frame(camera_id)
+        with frames_lock:
+            frame = latest_frames.get(camera_id)
+
         if frame is None:
             time.sleep(0.001)
             continue
@@ -162,6 +172,9 @@ try:
             frame, fps = camera.get_latest_frame(cam_id)
             if frame is None:
                 continue
+
+            with frames_lock:
+                latest_frames[cam_id] = frame
 
             now = time.time()
             if now - last_display[cam_id] < 1.0 / fps:

@@ -84,8 +84,6 @@ def start_cameras():
     Call ONCE from main before using frame_queues.
     """
     for cam_id in range(cameras_in_use):
-        if(cam_id == 0):
-            continue
         t = threading.Thread(
             target=_camera_thread,
             args=(cam_id,),
