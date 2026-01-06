@@ -7,11 +7,6 @@ import dnn_detector
 from plot_windows import display_frames_in_grid
 import camera
 import numpy as np
-from insightface.app import FaceAnalysis
-from insightface.model_zoo import get_model
-import os
-import mediapipe as mp
-import math
 from helpers import known_embeddings, known_names
 
 

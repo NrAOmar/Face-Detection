@@ -7,7 +7,6 @@ from insightface.model_zoo import get_model
 from insightface.app import FaceAnalysis
 import os
 import dnn_detector
-import time
 
 # frame_dnn_width  = int(cap.get(cv2.CAP_PROP_frame_dnn_WIDTH))
 # frame_dnn_height = int(cap.get(cv2.CAP_PROP_frame_dnn_HEIGHT))

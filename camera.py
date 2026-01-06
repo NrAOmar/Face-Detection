@@ -47,4 +47,5 @@ def camera_loop():
             else:
                 time.sleep(0.001)
 
-    cap.release()
+    for cap, values in caps.items():
+        cap.release()
