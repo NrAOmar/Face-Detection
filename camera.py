@@ -11,7 +11,7 @@ stop_flag = False
 # 0 -> external iPhone camera
 # 1 -> built-in webcam / phone
 # 2 -> external camera
-cameras_in_use = 3
+cameras_in_use = 2
 
 # One queue per camera (latest frame only)
 frame_queues = {}
@@ -21,7 +21,6 @@ fps_by_camera = {}
 
 # Optional: frame size per camera
 frame_sizes = {}
-frame_size = (1.0, 1280, 720)
 
 # Internal camera thread
 def _camera_thread(camera_id: int):
@@ -43,7 +42,6 @@ def _camera_thread(camera_id: int):
     if ret:
         h, w = frame.shape[:2]
         frame_sizes[camera_id] = (w, h)
-        print(frame_sizes[camera_id])
     else:
         frame_sizes[camera_id] = None
 
@@ -51,7 +49,7 @@ def _camera_thread(camera_id: int):
     q = queue.Queue(maxsize=1)
     frame_queues[camera_id] = q
 
-    print(f"[Camera {camera_id}] Started ({fps:.1f} FPS)")
+    print(f"[Camera {camera_id}] Started ({fps:.1f} FPS), Frame size: ({w}, {h})")
 
     while not stop_flag:
         ret, frame = cap.read()

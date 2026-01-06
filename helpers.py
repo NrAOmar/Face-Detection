@@ -8,9 +8,6 @@ from insightface.app import FaceAnalysis
 import os
 import dnn_detector
 
-# frame_dnn_width  = int(cap.get(cv2.CAP_PROP_frame_dnn_WIDTH))
-# frame_dnn_height = int(cap.get(cv2.CAP_PROP_frame_dnn_HEIGHT))
-
 _face_mesh = None
 _rec_model = None
 _app = None
@@ -30,11 +27,11 @@ def rotate_points_back(points, M):
     pts_homo = np.hstack([points, ones])
     return (M_inv @ pts_homo.T).T
 
-def get_rot_mat(angle, cropping = False):
-    (scale, w, h) = camera.frame_size
+def get_rot_mat(angle, frame_size, cropping = False):
+    (w, h) = frame_size
     center = (w // 2, h // 2)
 
-    rot_mat = cv2.getRotationMatrix2D(center, angle, scale)
+    rot_mat = cv2.getRotationMatrix2D(center, angle, 1.0)
 
     new_w = w
     new_h = h
@@ -52,12 +49,12 @@ def get_rot_mat(angle, cropping = False):
 
     return rot_mat, (new_w, new_h)
 
-def rotate_image(img, angle, cropping=False):
-    rot_mat, dimensions = get_rot_mat(angle, cropping)
+def rotate_image(img, angle, frame_size, cropping=False):
+    rot_mat, dimensions = get_rot_mat(angle, frame_size, cropping)
     rotated_img = cv2.warpAffine(img, rot_mat, dimensions)
     return rotated_img, rot_mat
 
-def construct_boxes(faces, angle, confidences=None, rotate_back=True):
+def construct_boxes(faces, angle, frame_size, confidences=None, rotate_back=True):
     """
     faces: list of (x, y, w, h)
     angle: rotation angle used for detection
@@ -82,22 +79,22 @@ def construct_boxes(faces, angle, confidences=None, rotate_back=True):
             meta = (angle, float(conf))     # DNN: angle + confidence
 
         if rotate_back:
-            rot_mat, dimensions = get_rot_mat(angle)
+            rot_mat, dimensions = get_rot_mat(angle, frame_size)
             corners = rotate_points_back(corners, rot_mat)
 
         boxes.append((corners, meta))
 
     return boxes
 
-def add_boxes_all(frame, boxes):
+def add_boxes_all(frame, boxes, frame_size):
     for (corners, texts) in boxes:
         # rotate corners back
         angle = texts[0]
 
         # fit axis-aligned box
         xmin, ymin, xmax, ymax = corners
-        xmin, xmax = np.clip([corners[:,0].min(), corners[:,0].max()], 0, camera.frame_size[1]-1).astype(int)
-        ymin, ymax = np.clip([corners[:,1].min(), corners[:,1].max()], 0, camera.frame_size[2]-1).astype(int)
+        xmin, xmax = np.clip([corners[:,0].min(), corners[:,0].max()], 0, frame_size[0]-1).astype(int)
+        ymin, ymax = np.clip([corners[:,1].min(), corners[:,1].max()], 0, frame_size[1]-1).astype(int)
         
         color = (0, 255, 0)
         if len(texts) > 1:
@@ -114,7 +111,7 @@ def add_boxes_all(frame, boxes):
     return frame
  
 
-def add_boxes(frame, boxes):
+def add_boxes(frame, boxes, frame_size):
     for b in boxes:
         x1 = b["x1"]
         y1 = b["y1"]
@@ -131,8 +128,8 @@ def add_boxes(frame, boxes):
 
         # fit axis-aligned box
         xmin, ymin, xmax, ymax = corners
-        xmin, xmax = np.clip([corners[:,0].min(), corners[:,0].max()], 0, camera.frame_size[1]-1).astype(int)
-        ymin, ymax = np.clip([corners[:,1].min(), corners[:,1].max()], 0, camera.frame_size[2]-1).astype(int)
+        xmin, xmax = np.clip([corners[:,0].min(), corners[:,0].max()], 0, frame_size[0]-1).astype(int)
+        ymin, ymax = np.clip([corners[:,1].min(), corners[:,1].max()], 0, frame_size[1]-1).astype(int)
         
         color = (0, 255, 0)
         cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
@@ -438,11 +435,6 @@ def clahe_luma(bgr):
     out = cv2.merge([y, cr, cb])
     return cv2.cvtColor(out, cv2.COLOR_YCrCb2BGR)
 
-def upscale_bgr(img_bgr, scale=2):
-
-    out, _ = _upsampler.enhance(img_bgr, outscale=2)
-    return out
-
 
 def embed_from_box(frame_bgr, box, margin=0.20):
     x1, y1, x2, y2 = to_xyxy(box)
@@ -462,11 +454,10 @@ def embed_from_box(frame_bgr, box, margin=0.20):
     if crop.size == 0:
         return None
 
-    # crop = clahe_luma(crop_normal)
-    crop112 = resize_to_112(crop_normal) # This function I use it to make a proper face recognition with out further faces wont be recognized.
+    crop_luma = clahe_luma(crop_normal)
+    crop112 = resize_to_112(crop_luma) # This function I use it to make a proper face recognition with out further faces wont be recognized.
     
    
-
     # cv2.imshow("Crop Normal", crop_normal)
     # cv2.imshow("Super Resolution", crop112)
     # cv2.waitKey(1)  # 1 ms so it doesn’t block

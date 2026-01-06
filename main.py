@@ -58,12 +58,14 @@ def haar_worker(camera_id: int, angle: int):
             time.sleep(0.001)
             continue
 
-        rotated, _ = helpers.rotate_image(frame, angle)
+        rotated, _ = helpers.rotate_image(frame, angle, camera.frame_sizes.get(camera_id))
         faces = haar_detector.detect_faces(rotated)
-        boxes = helpers.construct_boxes(faces, angle)
-
+        boxes = helpers.construct_boxes(faces, angle, camera.frame_sizes.get(camera_id))
+        boxes_filtered = helpers.dnn_filter_boxes(frame, boxes, margin= 0, conf_thr=0.2)
+        
         with results_lock:
-            boxes_by_key[(camera_id, "haar", angle)] = (boxes, time.time())
+            boxes_by_key[(camera_id, "haar_not_filtered", angle)] = (boxes, time.time())
+            boxes_by_key[(camera_id, "haar_filtered", angle)] = (boxes_filtered, time.time())
 
 
 def dnn_worker(camera_id: int, angle: int):
@@ -75,9 +77,9 @@ def dnn_worker(camera_id: int, angle: int):
             time.sleep(0.001)
             continue
 
-        rotated, _ = helpers.rotate_image(frame, angle)
+        rotated, _ = helpers.rotate_image(frame, angle, camera.frame_sizes.get(camera_id))
         faces, confs = dnn_detector.detect_faces(rotated)
-        boxes = helpers.construct_boxes(faces, angle, confs)
+        boxes = helpers.construct_boxes(faces, angle, camera.frame_sizes.get(camera_id), confs)
 
         with results_lock:
             boxes_by_key[(camera_id, "dnn", angle)] = (boxes, time.time())
@@ -109,6 +111,7 @@ def identify_worker(camera_id: int):
 
             name = known_names[idx] if sim >= THRESHOLD else "Unknown"
             labeled.append((helpers.to_xyxy(box), name, sim))
+            print("added a labeled box")
 
         with results_lock:
             labeled_faces[camera_id] = labeled
@@ -169,19 +172,22 @@ try:
                 continue
 
             boxes_all = []
-
+            view_all = frame.copy()
             with results_lock:
-                for (cid, _, _), (boxes, ts) in boxes_by_key.items():
+                for (cid, model, _), (boxes, ts) in boxes_by_key.items():
                     if cid == cam_id and now - ts < MAX_KEEP_TIME:
-                        boxes_all.extend(boxes)
+                        if model != "haar_filtered":
+                            view_all = helpers.add_boxes_all(view_all, boxes, camera.frame_sizes.get(cam_id))
+
+                        if model != "haar_not_filtered":
+                            boxes_all.extend(boxes)
 
             if FLAG_FUSION:
                 boxes_final = helpers.merge_boxes_with_iou(boxes_all, 0.4)
             else:
                 boxes_final = boxes_all
 
-            view_all = helpers.add_boxes_all(frame.copy(), boxes_all)
-            view_final = helpers.add_boxes(frame.copy(), boxes_final)
+            view_final = helpers.add_boxes(frame.copy(), boxes_final, camera.frame_sizes.get(cam_id))
 
             if FLAG_BIOMETRIC:
                 id_view = frame.copy()
