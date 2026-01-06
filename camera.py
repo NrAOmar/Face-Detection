@@ -1,51 +1,111 @@
 import cv2
-import helpers
+import queue
+import threading
 import time
 
+# -------------------------------------------------
+# Public state (imported by main)
+# -------------------------------------------------
 stop_flag = False
-caps = {}
-cameras_in_use = 3 # start with camera in the lab, then mac, then iphone
-frame_size = None
 
-def get_frame_size(cap):
-    frame_width  = cap.get(cv2.CAP_PROP_FRAME_WIDTH)   # float `width`
-    frame_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)  # float `height`
-    scale = 1.0
-    return (scale, frame_width, frame_height)
+# Number of cameras you want to use (0,1,2,...)
+# Example:
+# 0 -> built-in webcam
+# 1 -> external webcam / phone
+cameras_in_use = 3
 
-def get_fps(cap):
+# One queue per camera (latest frame only)
+frame_queues = {}
+
+# FPS per camera (best-effort)
+fps_by_camera = {}
+
+# Optional: frame size per camera
+frame_sizes = {}
+frame_size = (1.0, 1280, 720)
+
+# -------------------------------------------------
+# Internal camera thread
+# -------------------------------------------------
+def _camera_thread(camera_id: int):
+    cap = cv2.VideoCapture(camera_id, cv2.CAP_AVFOUNDATION)
+
+    if not cap.isOpened():
+        print(f"[Camera {camera_id}] ERROR: Could not open camera")
+        return
+
+    # Try to get FPS (often unreliable on macOS)
     fps = cap.get(cv2.CAP_PROP_FPS)
-    if fps == 0 or fps is None:
+    if fps is None or fps <= 1:
         fps = 20.0  # safe fallback
-    # print(f"Camera " + cap + " is recording at {fps} FPS")
-    print(f"Camera is recording at {fps} FPS")
-    return fps
 
-def camera_loop():
-    global caps, stop_flag, cameras_in_use, frame_size
+    fps_by_camera[camera_id] = fps
 
-    # Open camera (macOS AVFoundation). Try 2 then 1 then 0.
-    for i in range(0, cameras_in_use):
-        cap = cv2.VideoCapture(i)
-        if cap.isOpened():
-            caps[cap] = (None, get_fps(cap))
-            print("Recording... Press 'Esc' to stop.")
-            if i == 0:
-                frame_size = get_frame_size(cap)
-        else:
-            print("Error: Could not open camera " + str(i))
-            cameras_in_use -= 1
+    # Read one frame to get size
+    ret, frame = cap.read()
+    if ret:
+        h, w = frame.shape[:2]
+        frame_sizes[camera_id] = (w, h)
+        print(frame_sizes[camera_id])
+    else:
+        frame_sizes[camera_id] = None
 
-    if len(caps) == 0:
-        exit()
+    # Queue holds ONLY the latest frame (low latency)
+    q = queue.Queue(maxsize=1)
+    frame_queues[camera_id] = q
+
+    print(f"[Camera {camera_id}] Started ({fps:.1f} FPS)")
 
     while not stop_flag:
-        for cap, values in caps.items():
-            ret, frame = cap.read()
-            if ret:
-                caps[cap] = (frame.copy(), values[1])
-            else:
-                time.sleep(0.001)
+        ret, frame = cap.read()
+        if not ret:
+            time.sleep(0.001)
+            continue
 
-    for cap, values in caps.items():
-        cap.release()
+        # Always keep the newest frame
+        if q.full():
+            try:
+                q.get_nowait()
+            except queue.Empty:
+                pass
+
+        q.put(frame)
+
+    cap.release()
+    print(f"[Camera {camera_id}] Stopped")
+
+
+# -------------------------------------------------
+# Public API
+# -------------------------------------------------
+def start_cameras():
+    """
+    Starts one thread per camera.
+    Call ONCE from main before using frame_queues.
+    """
+    for cam_id in range(cameras_in_use):
+        if(cam_id == 0):
+            continue
+        t = threading.Thread(
+            target=_camera_thread,
+            args=(cam_id,),
+            daemon=True
+        )
+        t.start()
+
+
+def get_latest_frame(camera_id: int):
+    """
+    Non-blocking frame fetch.
+    Returns (frame, fps) or (None, None)
+    """
+    q = frame_queues.get(camera_id)
+    if q is None or q.empty():
+        return None, None
+
+    try:
+        frame = q.get_nowait()
+    except queue.Empty:
+        return None, None
+
+    return frame, fps_by_camera.get(camera_id, 20.0)

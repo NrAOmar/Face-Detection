@@ -1,235 +1,218 @@
 import cv2
 import threading
 import time
+import numpy as np
+
+import camera
 import helpers
 import haar_detector
 import dnn_detector
 from plot_windows import display_frames_in_grid
-import camera
-import numpy as np
 from helpers import known_embeddings, known_names
 
 
-# Features to enable
-flag_rotation = True
-flag_haar = True
-flag_dnn = True
-flag_modelsFusion = True    # TODO: this flag is currently not working for false,
-                            # maybe because merged_boxes is not the same format as boxes_to_draw
-flag_biometric = True
-# flag_enhancement = False # TODO: add enhancement to the input images
-# flag_lowPassFilter = False
-flag_multipleCameras = True
+# =================================================
+# Configuration flags
+# =================================================
+FLAG_ROTATION = True
+FLAG_HAAR = True
+FLAG_DNN = True
+FLAG_FUSION = True
+FLAG_BIOMETRIC = True
+FLAG_MULTIPLE_CAMERAS = True
 
-caps = camera.caps
-# processed_frame = None
-display_rotated_frame = None
-display_detected_all = None
-display_detected_final = None
-identified_frame = None
-
-angle_step = 120
-angle_to_display = angle_step # show first rotation step
+ANGLE_STEP = 120
 MAX_KEEP_TIME = 0.5
-
-labeled_boxes = []
-merged_boxes = []
-rotated_boxes = []
-boxes_by_angle = {}
-
-lock = threading.Lock()
-
-
-# HAAR_CONF = 0.5
-# CONF_EPS = 1e-3       # tolerance for float compare
-# DNN_VERIFY_THR = 0.6  # adjust if too strict
 THRESHOLD = 0.38
 
+
+# =================================================
+# Shared state (results only)
+# =================================================
+results_lock = threading.Lock()
+
+# (camera_id, model, angle) -> (boxes, timestamp)
+boxes_by_key = {}
+
+# camera_id -> list of (xyxy, name, sim)
+labeled_faces = {}
+
+
+# =================================================
+# Load known faces
+# =================================================
 helpers.load_known_faces()
 
 if len(known_embeddings) == 0:
-    raise RuntimeError("No known faces loaded. Check your dataset folder and images.")
+    raise RuntimeError("No known faces loaded")
 
-# known_embeddings: list of (512,) vectors
-# known_names: same length
 known_mat = np.stack(known_embeddings).astype(np.float32)
 known_mat /= (np.linalg.norm(known_mat, axis=1, keepdims=True) + 1e-10)
 
 
-def haar_loop(angle, camera_number):
-    global caps
-
+# =================================================
+# Detection threads
+# =================================================
+def haar_worker(camera_id: int, angle: int):
     while not camera.stop_flag:
-        (latest_frame, fps) = list(caps.values())[camera_number]
-        if latest_frame is None:
+        frame, _ = camera.get_latest_frame(camera_id)
+        if frame is None:
             time.sleep(0.001)
             continue
 
-        frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
-        faces = haar_detector.detect_faces(frame_rotated)
+        rotated, _ = helpers.rotate_image(frame, angle)
+        faces = haar_detector.detect_faces(rotated)
         boxes = helpers.construct_boxes(faces, angle)
-        boxes = helpers.dnn_filter_boxes(latest_frame.copy(), boxes, margin= 0, conf_thr=0.2)
 
-        # Write results ONLY for this angle
-        with lock:
-            boxes_by_angle[("haar", angle, camera_number)] = (boxes, time.time())
+        with results_lock:
+            boxes_by_key[(camera_id, "haar", angle)] = (boxes, time.time())
 
-def dnn_loop(angle, camera_number):
-    global caps, display_rotated_frame, rotated_boxes
-    
+
+def dnn_worker(camera_id: int, angle: int):
     while not camera.stop_flag:
-        (latest_frame, fps) = list(caps.values())[camera_number]
-        if latest_frame is None:
+        frame, _ = camera.get_latest_frame(camera_id)
+        if frame is None:
             time.sleep(0.001)
             continue
 
-        frame_rotated, rotation_matrix = helpers.rotate_image(latest_frame.copy(), angle)        
-        faces, conf_list = dnn_detector.detect_faces(frame_rotated)
-        boxes = helpers.construct_boxes(faces, angle, conf_list)
+        rotated, _ = helpers.rotate_image(frame, angle)
+        faces, confs = dnn_detector.detect_faces(rotated)
+        boxes = helpers.construct_boxes(faces, angle, confs)
 
-        if (angle == angle_to_display and camera_number == 0):
-            display_rotated_frame = frame_rotated.copy()
-            rotated_boxes = helpers.construct_boxes(faces, angle, conf_list, False)
-        else:
-            rotated_boxes = []
+        with results_lock:
+            boxes_by_key[(camera_id, "dnn", angle)] = (boxes, time.time())
 
-        # Write results ONLY for this angle
-        with lock:
-            boxes_by_angle[("dnn", angle, camera_number)] = (boxes, time.time())
-        
-def identify_faces(camera_number):
-    global caps, merged_boxes, labeled_boxes
 
-    last_good_name = "Unknown"
-    last_good_sim = 0.0
-    last_good_time = 0.0
-    hold_seconds = 0 # TODO: what does this do? does the threading take its place?
+def identify_worker(camera_id: int):
+    last_results = []
+
     while not camera.stop_flag:
-        (latest_frame, fps) = list(caps.values())[camera_number]
-        mbs = merged_boxes.copy()
-
-        if latest_frame is None:
+        frame, _ = camera.get_latest_frame(camera_id)
+        if frame is None:
             time.sleep(0.001)
             continue
 
-        now = time.time()
+        with results_lock:
+            boxes = last_results.copy()
 
-        labeled_boxes2 = []
-        for mb in mbs:
-            emb = helpers.embed_from_box(latest_frame.copy(), mb)
+        labeled = []
+        for box in boxes:
+            emb = helpers.embed_from_box(frame, box)
             if emb is None:
                 continue
+
             sims = known_mat @ emb
+            idx = int(np.argmax(sims))
+            sim = float(sims[idx])
 
-            best_idx = int(np.argmax(sims))
-            best_sim = float(sims[best_idx])
+            name = known_names[idx] if sim >= THRESHOLD else "Unknown"
+            labeled.append((helpers.to_xyxy(box), name, sim))
 
-            # Decide name for THIS frame
-            if best_sim >= THRESHOLD:
-                name = known_names[best_idx]
-                # update "last good"
-                last_good_name = name
-                last_good_sim = best_sim
-                last_good_time = now
-            else:
-                # If we recently had a confident name, hold it for a bit
-                if last_good_name != "Unknown" and (now - last_good_time) <= hold_seconds:
-                    name = last_good_name
-                    # Optional: show the last good sim instead of the low current sim
-                    best_sim = float(last_good_sim)
-                else:
-                    name = "Unknown"
+        with results_lock:
+            labeled_faces[camera_id] = labeled
 
-            labeled_boxes2.append((helpers.to_xyxy(mb), name, best_sim, camera_number)) # TODO: change this to only output the name not the box, then add the name to the merged_boxes somehow
-            while len(labeled_boxes2) > len(mbs):
-                labeled_boxes2.pop(0)
-            
-            with lock:
-                for i, labeled_box in enumerate(labeled_boxes):
-                    if labeled_box[3] == camera_number:
-                        labeled_boxes.pop(i)
-                
-                labeled_boxes.extend(labeled_boxes2.copy())
-            
+        time.sleep(0.01)
 
-if not flag_multipleCameras:
+
+# =================================================
+# Startup
+# =================================================
+if not FLAG_MULTIPLE_CAMERAS:
     camera.cameras_in_use = 1
 
-if not flag_rotation:
-    angle_step = 360
+camera.start_cameras()
 
-threading.Thread(target=camera.camera_loop, daemon=True).start()
+time.sleep(1.0)  # allow cameras to warm up
 
-while camera.cameras_in_use != len(caps):
-    caps = camera.caps
+num_cameras = camera.cameras_in_use
+angles = [0] if not FLAG_ROTATION else list(range(0, 360, ANGLE_STEP))
 
-for camera_number in range(0, camera.cameras_in_use):
-    for angle in range(0, 360, angle_step):
-        if (flag_haar):
-            threading.Thread(target=haar_loop, args=(angle, camera_number), daemon=True).start()
-        if (flag_dnn):
-            threading.Thread(target=dnn_loop, args=(angle, camera_number), daemon=True).start()
+for cam_id in range(num_cameras):
+    for angle in angles:
+        if FLAG_HAAR:
+            threading.Thread(
+                target=haar_worker,
+                args=(cam_id, angle),
+                daemon=True
+            ).start()
 
-    if flag_biometric:
-        threading.Thread(target=identify_faces, args=(camera_number,), daemon=True).start() # TODO: change to create a thread for each face
+        if FLAG_DNN:
+            threading.Thread(
+                target=dnn_worker,
+                args=(cam_id, angle),
+                daemon=True
+            ).start()
 
-last_display = [time.time()] * camera.cameras_in_use
+    if FLAG_BIOMETRIC:
+        threading.Thread(
+            target=identify_worker,
+            args=(cam_id,),
+            daemon=True
+        ).start()
+
+
+# =================================================
+# Display loop (real-time, no lag)
+# =================================================
+last_display = [0.0] * num_cameras
+
 try:
     while not camera.stop_flag:
-        caps = camera.caps
-        for i, (cap, (latest_frame, fps)) in enumerate(caps.items()):
+        for cam_id in range(num_cameras):
+            frame, fps = camera.get_latest_frame(cam_id)
+            if frame is None:
+                continue
+
             now = time.time()
-
-            if latest_frame is None:
+            if now - last_display[cam_id] < 1.0 / fps:
                 continue
 
-            if now - last_display[i] < 1/fps:
-                continue
+            boxes_all = []
 
-            boxes_to_draw = []
-            with lock:
-                for key, (boxes, ts) in boxes_by_angle.items():
-                    if now - ts < MAX_KEEP_TIME:
-                        boxes_by_angle[key] = (boxes, ts)
+            with results_lock:
+                for (cid, _, _), (boxes, ts) in boxes_by_key.items():
+                    if cid == cam_id and now - ts < MAX_KEEP_TIME:
+                        boxes_all.extend(boxes)
 
-                    if key[2] == i: # only current camera
-                        boxes_to_draw.extend(boxes)
-            
-            if flag_modelsFusion: # Get one merged box per face
-                merged_boxes = helpers.merge_boxes_with_iou(boxes_to_draw, iou_threshold=0.4)
-                merged_boxes = helpers.filter_boxes_by_confidence(merged_boxes, min_conf=0.5) # this still has some redundant boxes specially with more angles
+            if FLAG_FUSION:
+                boxes_final = helpers.merge_boxes_with_iou(boxes_all, 0.4)
             else:
-                merged_boxes = boxes_to_draw
+                boxes_final = boxes_all
 
-            display_detected_all = helpers.add_boxes_all(latest_frame.copy(), boxes_to_draw)
-            display_detected_final = helpers.add_boxes(latest_frame.copy(), merged_boxes) # TODO: change format of merged_boxes to be same as boxes_to_draw
-            display_rotated_frame = helpers.add_boxes_all(display_rotated_frame, rotated_boxes)
+            view_all = helpers.add_boxes_all(frame.copy(), boxes_all)
+            view_final = helpers.add_boxes(frame.copy(), boxes_final)
 
-            if flag_biometric:
-                identified_frame = latest_frame.copy(); 
-                for (x1, y1, x2, y2), name, sim, camera_no in labeled_boxes:
-                    if camera_no != i:
-                        continue
-                    cv2.rectangle(identified_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    cv2.putText(identified_frame, f"{name} {sim:.2f}", (x1, y1 - 10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-            
-            last_display[i] = now
+            if FLAG_BIOMETRIC:
+                id_view = frame.copy()
+                for (x1, y1, x2, y2), name, sim in labeled_faces.get(cam_id, []):
+                    cv2.rectangle(id_view, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    cv2.putText(
+                        id_view,
+                        f"{name} {sim:.2f}",
+                        (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        (0, 255, 0),
+                        2
+                    )
+            else:
+                id_view = frame
+
             display_frames_in_grid([
-                ("Original ", i, latest_frame),
-                # ("Rotated Example", i, display_rotated_frame),
-                ("All Detected Boxes", i, display_detected_all),
-                ("Fusion (HAAR & DNN) ", i, display_detected_final),
-                ("Identified ", i, identified_frame),
-                ])
+                ("Original", cam_id, frame),
+                ("All detections", cam_id, view_all),
+                ("Fused", cam_id, view_final),
+                ("Identified", cam_id, id_view),
+            ])
 
-            if cv2.waitKey(1) & 0xFF == 27:
-                camera.stop_flag = True
+            last_display[cam_id] = now
+
+        if cv2.waitKey(1) & 0xFF == 27:
+            camera.stop_flag = True
 
         time.sleep(0.001)
-except KeyboardInterrupt:
-    pass
 
-# camera.out_dnn.release()
-# camera.out_haar.release()
+except KeyboardInterrupt:
+    camera.stop_flag = True
+
 cv2.destroyAllWindows()
