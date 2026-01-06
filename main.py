@@ -47,6 +47,7 @@ if len(known_embeddings) == 0:
 known_mat = np.stack(known_embeddings).astype(np.float32)
 known_mat /= (np.linalg.norm(known_mat, axis=1, keepdims=True) + 1e-10)
 
+boxes_final = []
 
 # Detection threads
 def haar_worker(camera_id: int, angle: int):
@@ -86,37 +87,58 @@ def dnn_worker(camera_id: int, angle: int):
 
 
 def identify_worker(camera_id: int):
-    last_results = []
-
+    last_good_name = "Unknown"
+    last_good_sim = 0.0
+    last_good_time = 0.0
+    hold_seconds = 0 # TODO: what does this do? does the threading take its place?
     while not camera.stop_flag:
-        with frames_lock:
-            frame = latest_frames.get(camera_id)
-
-        if frame is None:
-            time.sleep(0.001)
-            continue
-
-        with results_lock:
-            boxes = last_results.copy()
-
-        labeled = []
-        for box in boxes:
-            emb = helpers.embed_from_box(frame, box)
-            if emb is None:
+        for cam_id in range(num_cameras):
+            with frames_lock:
+                frame, fps = camera.get_latest_frame(cam_id)
+            
+            if frame is None:
                 continue
 
-            sims = known_mat @ emb
-            idx = int(np.argmax(sims))
-            sim = float(sims[idx])
+            now = time.time()
 
-            name = known_names[idx] if sim >= THRESHOLD else "Unknown"
-            labeled.append((helpers.to_xyxy(box), name, sim))
-            print("added a labeled box")
+            labeled_boxes2 = []
+            mbs = boxes_final.copy()
+            for mb in mbs:
+                emb = helpers.embed_from_box(frame.copy(), mb)
+                if emb is None:
+                    continue
+                sims = known_mat @ emb
 
-        with results_lock:
-            labeled_faces[camera_id] = labeled
+                best_idx = int(np.argmax(sims))
+                best_sim = float(sims[best_idx])
 
-        time.sleep(0.01)
+                # Decide name for THIS frame
+                if best_sim >= THRESHOLD:
+                    name = known_names[best_idx]
+                    # update "last good"
+                    last_good_name = name
+                    last_good_sim = best_sim
+                    last_good_time = now
+                else:
+                    # If we recently had a confident name, hold it for a bit
+                    if last_good_name != "Unknown" and (now - last_good_time) <= hold_seconds:
+                        name = last_good_name
+                        # Optional: show the last good sim instead of the low current sim
+                        best_sim = float(last_good_sim)
+                    else:
+                        name = "Unknown"
+
+                labeled_boxes2.append((helpers.to_xyxy(mb), name, best_sim)) # TODO: change this to only output the name not the box, then add the name to the merged_boxes somehow
+                while len(labeled_boxes2) > len(mbs):
+                    labeled_boxes2.pop(0)
+                
+                # print(labeled_boxes2)
+                with results_lock:
+                    # for i, labeled_box in enumerate(labeled_boxes):
+                    #     if labeled_box[3] == camera_number:
+                    #         labeled_boxes.pop(i)
+                    
+                    labeled_faces[camera_id] = labeled_boxes2
 
 
 # Startup
