@@ -11,9 +11,7 @@ from plot_windows import display_frames_in_grid
 from helpers import known_embeddings, known_names
 
 
-# =================================================
 # Configuration flags
-# =================================================
 FLAG_ROTATION = True
 FLAG_HAAR = True
 FLAG_DNN = True
@@ -26,9 +24,7 @@ MAX_KEEP_TIME = 0.5
 THRESHOLD = 0.38
 
 
-# =================================================
 # Shared state (results only)
-# =================================================
 results_lock = threading.Lock()
 
 # (camera_id, model, angle) -> (boxes, timestamp)
@@ -42,9 +38,7 @@ latest_frames = {}
 frames_lock = threading.Lock()
 
 
-# =================================================
 # Load known faces
-# =================================================
 helpers.load_known_faces()
 
 if len(known_embeddings) == 0:
@@ -54,9 +48,7 @@ known_mat = np.stack(known_embeddings).astype(np.float32)
 known_mat /= (np.linalg.norm(known_mat, axis=1, keepdims=True) + 1e-10)
 
 
-# =================================================
 # Detection threads
-# =================================================
 def haar_worker(camera_id: int, angle: int):
     while not camera.stop_flag:
         with frames_lock:
@@ -124,9 +116,7 @@ def identify_worker(camera_id: int):
         time.sleep(0.01)
 
 
-# =================================================
 # Startup
-# =================================================
 if not FLAG_MULTIPLE_CAMERAS:
     camera.cameras_in_use = 1
 
@@ -161,9 +151,7 @@ for cam_id in range(num_cameras):
         ).start()
 
 
-# =================================================
 # Display loop (real-time, no lag)
-# =================================================
 last_display = [0.0] * num_cameras
 
 try:

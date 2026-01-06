@@ -3,15 +3,14 @@ import queue
 import threading
 import time
 
-# -------------------------------------------------
 # Public state (imported by main)
-# -------------------------------------------------
 stop_flag = False
 
 # Number of cameras you want to use (0,1,2,...)
 # Example:
-# 0 -> built-in webcam
-# 1 -> external webcam / phone
+# 0 -> external iPhone camera
+# 1 -> built-in webcam / phone
+# 2 -> external camera
 cameras_in_use = 3
 
 # One queue per camera (latest frame only)
@@ -24,9 +23,7 @@ fps_by_camera = {}
 frame_sizes = {}
 frame_size = (1.0, 1280, 720)
 
-# -------------------------------------------------
 # Internal camera thread
-# -------------------------------------------------
 def _camera_thread(camera_id: int):
     cap = cv2.VideoCapture(camera_id, cv2.CAP_AVFOUNDATION)
 
@@ -75,9 +72,7 @@ def _camera_thread(camera_id: int):
     print(f"[Camera {camera_id}] Stopped")
 
 
-# -------------------------------------------------
 # Public API
-# -------------------------------------------------
 def start_cameras():
     """
     Starts one thread per camera.
