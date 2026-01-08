@@ -8,7 +8,6 @@ import helpers
 import haar_detector
 import dnn_detector
 from plot_windows import display_frames_in_grid
-from helpers import known_embeddings, known_names
 
 
 # Configuration flags
@@ -16,10 +15,10 @@ FLAG_ROTATION = True
 FLAG_HAAR = True # not tested
 FLAG_DNN = True # not tested
 FLAG_FUSION = True # not tested
-FLAG_BIOMETRIC = True # not tested
-FLAG_MULTIPLE_CAMERAS = True # not tested
+FLAG_BIOMETRIC = False
+FLAG_MULTIPLE_CAMERAS = True # TODO: change implementation to the old architecture if only 1 camera
 
-ANGLE_STEP = 120
+ANGLE_STEP = 45
 MAX_KEEP_TIME = 0.5
 THRESHOLD = 0.38
 
@@ -36,18 +35,6 @@ labeled_faces = {}
 # camera_id -> last frame (shared, read-only)
 latest_frames = {}
 frames_lock = threading.Lock()
-
-
-# Load known faces
-helpers.load_known_faces()
-
-if len(known_embeddings) == 0:
-    raise RuntimeError("No known faces loaded")
-
-known_mat = np.stack(known_embeddings).astype(np.float32)
-known_mat /= (np.linalg.norm(known_mat, axis=1, keepdims=True) + 1e-10)
-
-boxes_final = []
 
 # Detection threads
 def haar_worker(camera_id: int, angle: int):
@@ -146,6 +133,20 @@ if not FLAG_MULTIPLE_CAMERAS:
     camera.cameras_in_use = 1
 
 camera.start_cameras()
+
+if FLAG_BIOMETRIC:
+    helpers.prepare_models()
+
+    # Load known faces
+    (known_embeddings, known_names) = helpers.load_known_faces()
+
+    if len(known_embeddings) == 0:
+        raise RuntimeError("No known faces loaded")
+
+    known_mat = np.stack(known_embeddings).astype(np.float32)
+    known_mat /= (np.linalg.norm(known_mat, axis=1, keepdims=True) + 1e-10)
+
+    boxes_final = []
 
 time.sleep(1.0)  # allow cameras to warm up
 

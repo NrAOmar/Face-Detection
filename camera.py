@@ -39,6 +39,7 @@ def _camera_thread(camera_id: int):
 
     # Read one frame to get size
     ret, frame = cap.read()
+    h, w = (0, 0)
     if ret:
         h, w = frame.shape[:2]
         frame_sizes[camera_id] = (w, h)

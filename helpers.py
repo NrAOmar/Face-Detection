@@ -8,17 +8,9 @@ from insightface.app import FaceAnalysis
 import os
 import dnn_detector
 
-_face_mesh = None
-_rec_model = None
-_app = None
-
-# ---------- Load known faces ----------
-known_embeddings = []
-known_names = []
-last_good_name = "Unknown"
-last_good_sim = 0.0
-last_good_time = 0.0
-
+face_mesh = None
+rec_model = None
+app = None
 
 
 def rotate_points_back(points, M):
@@ -109,7 +101,6 @@ def add_boxes_all(frame, boxes, frame_size):
     cv2.putText(frame, f"Faces: {len(boxes)}", (10,30),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
     return frame
- 
 
 def add_boxes(frame, boxes, frame_size):
     for b in boxes:
@@ -143,7 +134,6 @@ def add_boxes(frame, boxes, frame_size):
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
     return frame
-
 
 def preprocess_boxes(boxes_to_draw):
     """
@@ -360,19 +350,25 @@ def filter_boxes_by_confidence(merged_boxes, min_conf=0.5):
     """
     return [b for b in merged_boxes if float(b.get("conf", 0.0)) >= min_conf]
 
+def prepare_models(ctx_id=0, det_size=(320, 320), name="buffalo_l"):
+    global face_mesh, rec_model, app
+    face_mesh = mp.solutions.face_mesh.FaceMesh(
+        static_image_mode=False,
+        max_num_faces=1,
+        refine_landmarks=True,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5,
+    )
 
-def _get_face_mesh():
-    global _face_mesh
-    if _face_mesh is None:
-        mp_face_mesh = mp.solutions.face_mesh
-        _face_mesh = mp_face_mesh.FaceMesh(
-            static_image_mode=False,
-            max_num_faces=1,
-            refine_landmarks=True,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5,
-        )
-    return _face_mesh
+    rec_path = os.path.join(
+        os.path.expanduser("~"),
+        ".insightface", "models", "buffalo_l", "w600k_r50.onnx"
+    )
+    rec_model = get_model(rec_path)
+    rec_model.prepare(ctx_id=ctx_id)
+
+    app = FaceAnalysis(name=name)
+    app.prepare(ctx_id=ctx_id, det_size=det_size)
 
 def align_crop_by_eyes(crop_bgr):
     h, w = crop_bgr.shape[:2]
@@ -380,7 +376,6 @@ def align_crop_by_eyes(crop_bgr):
         return crop_bgr
 
     rgb = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
-    face_mesh = _get_face_mesh()
     res = face_mesh.process(rgb)
     if not res.multi_face_landmarks:
         return crop_bgr
@@ -406,17 +401,6 @@ def to_xyxy(box):
     # Fallback for list/tuple/np-array boxes
     x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
     return int(x1), int(y1), int(x2), int(y2)
-
-def get_rec_model(ctx_id=0):
-    global _rec_model
-    if _rec_model is None:
-        rec_path = os.path.join(
-            os.path.expanduser("~"),
-            ".insightface", "models", "buffalo_l", "w600k_r50.onnx"
-        )
-        _rec_model = get_model(rec_path)
-        _rec_model.prepare(ctx_id=ctx_id)
-    return _rec_model
 
 def resize_to_112(img):
     h, w = img.shape[:2]
@@ -461,7 +445,6 @@ def embed_from_box(frame_bgr, box, margin=0.20):
     # cv2.imshow("Crop Normal", crop_normal)
     # cv2.imshow("Super Resolution", crop112)
     # cv2.waitKey(1)  # 1 ms so it doesn’t block
-    rec_model = get_rec_model(ctx_id=0)  # gets cached model
     feat = rec_model.get_feat(crop112).flatten().astype(np.float32)
     feat /= (np.linalg.norm(feat) + 1e-10)
     return feat
@@ -507,17 +490,6 @@ def dnn_filter_boxes(frame_bgr, boxes, margin, conf_thr):
 
     return confirmed
 
-def get_face_app(ctx_id=0, det_size=(320, 320), name="buffalo_l"):
-    """
-    Returns a cached InsightFace FaceAnalysis instance.
-    Creates it once, then reuses it.
-    """
-    global _app
-    if _app is None:
-        _app = FaceAnalysis(name=name)
-        _app.prepare(ctx_id=ctx_id, det_size=det_size)
-    return _app
-
 def load_known_faces(base_path="dataset"):
     for person in os.listdir(base_path):
         person_path = os.path.join(base_path, person)
@@ -529,10 +501,10 @@ def load_known_faces(base_path="dataset"):
             img = cv2.imread(img_path)
             if img is None:
                 continue
-            app = get_face_app(ctx_id=0, det_size=(320, 320))
             faces = app.get(img)
             if len(faces) > 0:
                 known_embeddings.append(faces[0].embedding.astype(np.float32))
                 known_names.append(person)
 
     print(f"Loaded {len(known_embeddings)} known faces")
+    return (known_embeddings, known_names)
