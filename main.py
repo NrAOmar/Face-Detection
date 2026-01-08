@@ -13,12 +13,12 @@ from plot_windows import display_frames_in_grid
 # Configuration flags
 FLAG_ROTATION = True
 FLAG_HAAR = True # not tested
-FLAG_DNN = True # not tested
+FLAG_DNN = False # not tested
 FLAG_FUSION = True # not tested
-FLAG_BIOMETRIC = False
+FLAG_BIOMETRIC = True
 FLAG_MULTIPLE_CAMERAS = False # TODO: change implementation to the old architecture if only 1 camera
 
-ANGLE_STEP_HAAR = 120
+ANGLE_STEP_HAAR = 20
 ANGLE_STEP_DNN = 360
 MAX_KEEP_TIME = 0.5
 THRESHOLD = 0.38
@@ -38,6 +38,7 @@ latest_frames = {}
 frames_lock = threading.Lock()
 starting_camera = camera.starting_camera
 
+boxes_merged = []
 
 # Detection threads
 def haar_worker(camera_id: int, angle: int):
@@ -52,8 +53,12 @@ def haar_worker(camera_id: int, angle: int):
         rotated, _ = helpers.rotate_image(frame, angle, camera.frame_sizes.get(camera_id))
         faces = haar_detector.detect_faces(rotated)
         boxes = helpers.construct_boxes(faces, angle, camera.frame_sizes.get(camera_id))
-        boxes_filtered = helpers.dnn_filter_boxes(frame, boxes, margin= 0, conf_thr=0.2)
         
+        if FLAG_FUSION:
+            boxes_filtered = helpers.dnn_filter_boxes(frame, boxes, camera.frame_sizes.get(camera_id), conf_thr=0.2)
+        else:
+            boxes_filtered = boxes
+
         with results_lock:
             boxes_by_key[(camera_id, "haar_not_filtered", angle)] = (boxes, time.time())
             boxes_by_key[(camera_id, "haar_filtered", angle)] = (boxes_filtered, time.time())
@@ -77,10 +82,6 @@ def dnn_worker(camera_id: int, angle: int):
 
 
 def identify_worker(camera_id: int):
-    last_good_name = "Unknown"
-    last_good_sim = 0.0
-    last_good_time = 0.0
-    hold_seconds = 0 # TODO: what does this do? does the threading take its place?
     while not camera.stop_flag:
         for cam_id in range(starting_camera, num_cameras):
             with frames_lock:
@@ -89,11 +90,8 @@ def identify_worker(camera_id: int):
             if frame is None:
                 continue
 
-            now = time.time()
-
-            labeled_boxes2 = []
-            mbs = boxes_final.copy()
-            for mb in mbs:
+            boxes_labeled = boxes_merged.copy()
+            for mb in boxes_labeled:
                 emb = helpers.embed_from_box(frame.copy(), mb)
                 if emb is None:
                     continue
@@ -102,34 +100,13 @@ def identify_worker(camera_id: int):
                 best_idx = int(np.argmax(sims))
                 best_sim = float(sims[best_idx])
 
-                # Decide name for THIS frame
+                mb["similarity"] = best_sim
                 if best_sim >= THRESHOLD:
-                    name = known_names[best_idx]
-                    # update "last good"
-                    last_good_name = name
-                    last_good_sim = best_sim
-                    last_good_time = now
+                    mb["name"] = known_names[best_idx]
                 else:
-                    # If we recently had a confident name, hold it for a bit
-                    if last_good_name != "Unknown" and (now - last_good_time) <= hold_seconds:
-                        name = last_good_name
-                        # Optional: show the last good sim instead of the low current sim
-                        best_sim = float(last_good_sim)
-                    else:
-                        name = "Unknown"
+                    mb["name"] = "Unknown"
 
-                labeled_boxes2.append((helpers.to_xyxy(mb), name, best_sim)) # TODO: change this to only output the name not the box, then add the name to the merged_boxes somehow
-                while len(labeled_boxes2) > len(mbs):
-                    labeled_boxes2.pop(0)
-                
-                # print(labeled_boxes2)
-                with results_lock:
-                    # for i, labeled_box in enumerate(labeled_boxes):
-                    #     if labeled_box[3] == camera_number:
-                    #         labeled_boxes.pop(i)
-                    
-                    labeled_faces[camera_id] = labeled_boxes2
-
+            labeled_faces[camera_id] = boxes_labeled
 
 # Startup
 if FLAG_MULTIPLE_CAMERAS:
@@ -149,7 +126,6 @@ if FLAG_BIOMETRIC:
     known_mat = np.stack(known_embeddings).astype(np.float32)
     known_mat /= (np.linalg.norm(known_mat, axis=1, keepdims=True) + 1e-10)
 
-    boxes_final = []
 
 time.sleep(1.0)  # allow cameras to warm up
 
@@ -206,35 +182,25 @@ try:
 
             boxes_all = []
             view_all = frame.copy()
+            total_faces = 0
             with results_lock:
                 for (cid, model, _), (boxes, ts) in boxes_by_key.items():
                     if cid == cam_id and now - ts < MAX_KEEP_TIME:
                         if model != "haar_filtered":
-                            view_all = helpers.add_boxes_all(view_all, boxes, camera.frame_sizes.get(cam_id))
+                            (view_all, num_faces) = helpers.add_boxes_all(view_all, boxes, camera.frame_sizes.get(cam_id))
+                            total_faces += num_faces
 
                         if model != "haar_not_filtered":
                             boxes_all.extend(boxes)
-
-            if FLAG_FUSION:
-                boxes_final = helpers.merge_boxes_with_iou(boxes_all, 0.4)
-            else:
-                boxes_final = boxes_all
-
-            view_final = helpers.add_boxes(frame.copy(), boxes_final, camera.frame_sizes.get(cam_id))
+            
+            cv2.putText(view_all, f"Faces: {total_faces}", (10,30),
+            cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
+            
+            boxes_merged = helpers.merge_boxes_with_iou(boxes_all, camera.frame_sizes.get(cam_id), 0.4, 0.5)
+            view_final = helpers.add_boxes(frame.copy(), boxes_merged, camera.frame_sizes.get(cam_id))
 
             if FLAG_BIOMETRIC:
-                id_view = frame.copy()
-                for (x1, y1, x2, y2), name, sim in labeled_faces.get(cam_id, []):
-                    cv2.rectangle(id_view, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    cv2.putText(
-                        id_view,
-                        f"{name} {sim:.2f}",
-                        (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (0, 255, 0),
-                        2
-                    )
+                id_view = helpers.add_boxes(frame.copy(), labeled_faces.get(cam_id, []), camera.frame_sizes.get(cam_id))
             else:
                 id_view = frame
 

@@ -55,7 +55,7 @@ def construct_boxes(faces, angle, frame_size, confidences=None, rotate_back=True
     boxes = []
 
     if confidences is None:
-        confidences = [None] * len(faces)
+        confidences = [0.5] * len(faces)
 
     for (x, y, w, h), conf in zip(faces, confidences):
         corners = np.array([
@@ -65,10 +65,7 @@ def construct_boxes(faces, angle, frame_size, confidences=None, rotate_back=True
             [x + w, y + h],
         ], dtype=np.float32)
 
-        if conf is None:
-            meta = (angle,)                 # Haar: only angle
-        else:
-            meta = (angle, float(conf))     # DNN: angle + confidence
+        meta = (angle, float(conf))
 
         if rotate_back:
             rot_mat, dimensions = get_rot_mat(angle, frame_size)
@@ -89,18 +86,16 @@ def add_boxes_all(frame, boxes, frame_size):
         ymin, ymax = np.clip([corners[:,1].min(), corners[:,1].max()], 0, frame_size[1]-1).astype(int)
         
         color = (0, 255, 0)
-        if len(texts) > 1:
+        if texts[1] != 0.5:
             color = (255, 0, 0)
             cv2.putText(frame, f"{texts[1]}", (xmin, max(0, ymin-8)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
         
         cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
-        cv2.putText(frame, f"{angle}°", (xmin, max(0, ymin+16)),
+        cv2.putText(frame, f"{angle} degrees", (xmin, max(0, ymin+16)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
-    cv2.putText(frame, f"Faces: {len(boxes)}", (10,30),
-                cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
-    return frame
+    return (frame, len(boxes))
 
 def add_boxes(frame, boxes, frame_size):
     for b in boxes:
@@ -108,7 +103,8 @@ def add_boxes(frame, boxes, frame_size):
         y1 = b["y1"]
         x2 = b["x2"]
         y2 = b["y2"]
-        conf = b.get("conf", None)
+        conf = b.get("similarity", b.get("conf", None))
+        name = b.get("name", "Confidence")
 
         corners = np.array([
             [x1, y1],
@@ -126,7 +122,7 @@ def add_boxes(frame, boxes, frame_size):
         cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
 
         if conf is not None:
-            text = f"{conf:.2f}"
+            text = f"{name}, {conf:.2f}"
             cv2.putText(frame, text, (xmin, max(0, ymin - 8)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
     # Faces count
@@ -135,7 +131,7 @@ def add_boxes(frame, boxes, frame_size):
 
     return frame
 
-def preprocess_boxes(boxes_to_draw):
+def preprocess_boxes(boxes_to_draw, frame_size):
     """
     Convert your (points, meta) boxes into a convenient dict with:
     x1, y1, x2, y2, w, h, cx, cy, angle, conf, points, meta
@@ -160,25 +156,23 @@ def preprocess_boxes(boxes_to_draw):
 
         # meta is (angle,) for Haar, (angle, conf) for DNN
         angle = float(meta[0]) if len(meta) >= 1 else None
-        if len(meta) >= 2:
-            conf = float(meta[1])  # DNN confidence
-        else:
-            conf = 0.5            # default for Haar (or any no-conf detector)
+        conf = float(meta[1])  # DNN confidence
 
-        processed.append({
-            "x1": x1,
-            "y1": y1,
-            "x2": x2,
-            "y2": y2,
-            "w": w,
-            "h": h,
-            "cx": cx,
-            "cy": cy,
-            "angle": angle,
-            "conf": conf,
-            "points": points,
-            "meta": meta,
-        })
+        if w * h < frame_size[0] * frame_size[1] / 4:
+            processed.append({
+                "x1": x1,
+                "y1": y1,
+                "x2": x2,
+                "y2": y2,
+                "w": w,
+                "h": h,
+                "cx": cx,
+                "cy": cy,
+                "angle": angle,
+                "conf": conf,
+                "points": points,
+                "meta": meta,
+            })
 
     return processed
 
@@ -211,10 +205,10 @@ def iou(box_a, box_b):
 
     return inter_area / union_area
 
-def cluster_boxes(box_infos, iou_threshold=0.5):
+def cluster_boxes(box_infos, threshold_iou=0.5):
     """
     box_infos: list of box dicts (output of preprocess_boxes)
-    iou_threshold: boxes with IOU above this value are considered same face
+    threshold_iou: boxes with IOU above this value are considered same face
 
     returns: list of clusters, each cluster is a list of box dicts
     """
@@ -240,7 +234,7 @@ def cluster_boxes(box_infos, iou_threshold=0.5):
                 if visited[k]:
                     continue
                 box_k = box_infos[k]
-                if iou(box_j, box_k) >= iou_threshold:
+                if iou(box_j, box_k) >= threshold_iou:
                     visited[k] = True
                     stack.append(k)
                     cluster_indices.append(k)
@@ -314,11 +308,12 @@ def fuse_cluster_weighted(cluster):
         "cx": cx_final,
         "cy": cy_final,
         "conf": avg_conf,          # <--- now between ~0 and 1 (if inputs are)
+        # "name": "Unknown",
         "cluster_size": len(cluster),
         "members": cluster,
     }
 
-def merge_boxes_with_iou(boxes_to_draw, iou_threshold=0.4):
+def merge_boxes_with_iou(boxes_to_draw, frame_size, threshold_iou=0.4, threshold_conf=0.5):
     """
     boxes_to_draw: list of (points, meta) as in your current code
 
@@ -329,16 +324,16 @@ def merge_boxes_with_iou(boxes_to_draw, iou_threshold=0.4):
         return []
 
     # Step 1: preprocess
-    box_infos = preprocess_boxes(boxes_to_draw)
+    box_infos = preprocess_boxes(boxes_to_draw, frame_size)
 
     # Step 2: cluster by IOU
-    clusters = cluster_boxes(box_infos, iou_threshold=iou_threshold)
+    clusters = cluster_boxes(box_infos, threshold_iou)
 
     # Step 3: fuse each cluster
     merged = []
     for cluster in clusters:
         merged_box = fuse_cluster_weighted(cluster)
-        if merged_box is not None:
+        if float(merged_box.get("conf", 0.0)) >= threshold_conf:
             merged.append(merged_box)
 
     return merged
@@ -450,15 +445,15 @@ def embed_from_box(frame_bgr, box, margin=0.20):
     return feat
 # This function is added to verify the haar with Dnn detection
 
-def dnn_filter_boxes(frame_bgr, boxes, margin, conf_thr):
-    confirmed = []
+def dnn_filter_boxes(frame_bgr, boxes, frame_size, conf_thr):
+    boxes_confirmed = []
 
-    for det in boxes:
-        box_arr = det[0]      # (4,2)
+    for box in boxes:
+        corners = box[0]      # (4,2)
 
         # bbox from points
-        xs = box_arr[:, 0]
-        ys = box_arr[:, 1]
+        xs = corners[:, 0]
+        ys = corners[:, 1]
         x1, y1, x2, y2 = int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
 
         w = x2 - x1
@@ -466,13 +461,10 @@ def dnn_filter_boxes(frame_bgr, boxes, margin, conf_thr):
         if w <= 0 or h <= 0:
             continue
 
-        mx = int(w * margin)
-        my = int(h * margin)
-
-        x1c = max(0, x1 - mx)
-        y1c = max(0, y1 - my)
-        x2c = min(frame_bgr.shape[1], x2 + mx)
-        y2c = min(frame_bgr.shape[0], y2 + my)
+        x1c = max(0, x1)
+        y1c = max(0, y1)
+        x2c = min(frame_bgr.shape[1], x2)
+        y2c = min(frame_bgr.shape[0], y2)
 
         crop = frame_bgr[y1c:y2c, x1c:x2c]
         if crop.size == 0:
@@ -481,16 +473,23 @@ def dnn_filter_boxes(frame_bgr, boxes, margin, conf_thr):
 
         faces, confs = dnn_detector.detect_faces(crop)
 
-
         # keep this Haar box only if DNN sees a face in the crop confidently
         if len(faces) > 0 and any(c >= conf_thr for c in confs):
-            confirmed.append(det)
+            # det['conf'] = confs
+            # boxes = construct_boxes(faces, box[1][0], frame_size, confs)
+            # print(box[1][0])
+            box_new = (box[0], (box[1][0], max(confs)))
+            # box[1] = (box[1][0], max(confs))
+            boxes_confirmed.append(box_new)
         if any(c <= conf_thr for c in confs):
             print("function works")
 
-    return confirmed
+    return boxes_confirmed
 
 def load_known_faces(base_path="dataset"):
+    known_embeddings = []
+    known_names = []
+
     for person in os.listdir(base_path):
         person_path = os.path.join(base_path, person)
         if not os.path.isdir(person_path):
