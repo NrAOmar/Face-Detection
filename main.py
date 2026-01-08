@@ -16,9 +16,10 @@ FLAG_HAAR = True # not tested
 FLAG_DNN = True # not tested
 FLAG_FUSION = True # not tested
 FLAG_BIOMETRIC = False
-FLAG_MULTIPLE_CAMERAS = True # TODO: change implementation to the old architecture if only 1 camera
+FLAG_MULTIPLE_CAMERAS = False # TODO: change implementation to the old architecture if only 1 camera
 
-ANGLE_STEP = 45
+ANGLE_STEP_HAAR = 120
+ANGLE_STEP_DNN = 360
 MAX_KEEP_TIME = 0.5
 THRESHOLD = 0.38
 
@@ -35,6 +36,8 @@ labeled_faces = {}
 # camera_id -> last frame (shared, read-only)
 latest_frames = {}
 frames_lock = threading.Lock()
+starting_camera = camera.starting_camera
+
 
 # Detection threads
 def haar_worker(camera_id: int, angle: int):
@@ -79,7 +82,7 @@ def identify_worker(camera_id: int):
     last_good_time = 0.0
     hold_seconds = 0 # TODO: what does this do? does the threading take its place?
     while not camera.stop_flag:
-        for cam_id in range(num_cameras):
+        for cam_id in range(starting_camera, num_cameras):
             with frames_lock:
                 frame, fps = camera.get_latest_frame(cam_id)
             
@@ -129,10 +132,10 @@ def identify_worker(camera_id: int):
 
 
 # Startup
-if not FLAG_MULTIPLE_CAMERAS:
-    camera.cameras_in_use = 1
-
-camera.start_cameras()
+if FLAG_MULTIPLE_CAMERAS:
+    camera.start_cameras()
+else:
+    camera.start_cameras(1) # only start 1 camera
 
 if FLAG_BIOMETRIC:
     helpers.prepare_models()
@@ -151,10 +154,15 @@ if FLAG_BIOMETRIC:
 time.sleep(1.0)  # allow cameras to warm up
 
 num_cameras = camera.cameras_in_use
-angles = [0] if not FLAG_ROTATION else list(range(0, 360, ANGLE_STEP))
+if not FLAG_MULTIPLE_CAMERAS:
+    starting_camera = camera.starting_camera
+    num_cameras = starting_camera + 1
 
-for cam_id in range(num_cameras):
-    for angle in angles:
+angles_haar = [0] if not FLAG_ROTATION else list(range(0, 360, ANGLE_STEP_HAAR))
+angles_dnn  = [0] if not FLAG_ROTATION else list(range(0, 360, ANGLE_STEP_DNN))
+
+for cam_id in range(starting_camera, num_cameras):
+    for angle in angles_haar:
         if FLAG_HAAR:
             threading.Thread(
                 target=haar_worker,
@@ -162,6 +170,7 @@ for cam_id in range(num_cameras):
                 daemon=True
             ).start()
 
+    for angle in angles_dnn:
         if FLAG_DNN:
             threading.Thread(
                 target=dnn_worker,
@@ -182,8 +191,9 @@ last_display = [0.0] * num_cameras
 
 try:
     while not camera.stop_flag:
-        for cam_id in range(num_cameras):
+        for cam_id in range(starting_camera, num_cameras):
             frame, fps = camera.get_latest_frame(cam_id)
+
             if frame is None:
                 continue
 

@@ -46,8 +46,8 @@ def display_frames_in_grid(frames_to_display, title_bar_height=29, margin=0):
         # Resize frame
         resized, rw, rh = resize_with_aspect_ratio(frame, win_w, win_h)
 
-        r = (window_number+camera_number*len(frames_to_display)) // cols
-        c = (window_number+camera_number*len(frames_to_display)) % cols
+        r = (window_number+(camera_number-camera.starting_camera)*len(frames_to_display)) // cols
+        c = (window_number+(camera_number-camera.starting_camera)*len(frames_to_display)) % cols
 
         # Compute safe positions
         pos_x = margin + c * (win_w + margin)

@@ -11,7 +11,8 @@ stop_flag = False
 # 0 -> external iPhone camera
 # 1 -> built-in webcam / phone
 # 2 -> external camera
-cameras_in_use = 2
+starting_camera = 0
+cameras_in_use = 3
 
 # One queue per camera (latest frame only)
 frame_queues = {}
@@ -24,9 +25,11 @@ frame_sizes = {}
 
 # Internal camera thread
 def _camera_thread(camera_id: int):
-    cap = cv2.VideoCapture(camera_id, cv2.CAP_AVFOUNDATION)
+    global cameras_in_use
 
+    cap = cv2.VideoCapture(camera_id, cv2.CAP_AVFOUNDATION)
     if not cap.isOpened():
+        cameras_in_use -= 1
         print(f"[Camera {camera_id}] ERROR: Could not open camera")
         return
 
@@ -72,19 +75,42 @@ def _camera_thread(camera_id: int):
 
 
 # Public API
-def start_cameras():
+def start_cameras(num_of_cameras=cameras_in_use):
+    global starting_camera, cameras_in_use
     """
     Starts one thread per camera.
     Call ONCE from main before using frame_queues.
     """
-    for cam_id in range(cameras_in_use):
-        t = threading.Thread(
-            target=_camera_thread,
-            args=(cam_id,),
-            daemon=True
-        )
-        t.start()
+    if num_of_cameras > 1:
+        cameras_in_use = num_of_cameras
+        for cam_id in range(cameras_in_use):
+            t = threading.Thread(
+                target=_camera_thread,
+                args=(cam_id,),
+                daemon=True
+            )
+            t.start()
+    else:
+        # Open camera (macOS AVFoundation). Try 2 then 1 then 0.
+        cam_id = cameras_in_use-1
+        cameras_in_use = 1
+        cap = cv2.VideoCapture(cam_id)
+        while not cap.isOpened() and cam_id >= 0:
+            cam_id -= 1
+            cap = cv2.VideoCapture(cam_id)
 
+        starting_camera = cam_id
+        if not cap.isOpened():
+            print("Error: Could not open camera.")
+            exit()
+        else:
+            cap.release()
+            t = threading.Thread(
+                target=_camera_thread,
+                args=(cam_id,),
+                daemon=True
+            )
+            t.start()
 
 def get_latest_frame(camera_id: int):
     """
