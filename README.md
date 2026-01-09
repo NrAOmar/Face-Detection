@@ -24,6 +24,7 @@
 - add biometrics
     - change to only add the name to current boxes instead of adding new boxes
     - use 1 worker for each name
+- adjust text size to depend on frame size
 
 - fix writing to .mp4 file
 - add low pass filter for faces

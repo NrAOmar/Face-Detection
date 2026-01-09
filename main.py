@@ -16,7 +16,7 @@ FLAG_HAAR = True # not tested
 FLAG_DNN = True # not tested
 FLAG_FUSION = True # not tested
 FLAG_BIOMETRIC = True
-FLAG_MULTIPLE_CAMERAS = False
+FLAG_MULTIPLE_CAMERAS = True
 
 ANGLE_STEP_HAAR = 120
 ANGLE_STEP_DNN = 360
@@ -83,30 +83,30 @@ def dnn_worker(camera_id: int, angle: int):
 
 def identify_worker(camera_id: int):
     while not camera.stop_flag:
-        for cam_id in range(starting_camera, num_cameras):
-            with frames_lock:
-                frame, fps = camera.get_latest_frame(cam_id)
-            
-            if frame is None:
+    # for cam_id in range(starting_camera, num_cameras):
+        with frames_lock:
+            frame, fps = camera.get_latest_frame(cam_id)
+        
+        if frame is None:
+            continue
+
+        boxes_labeled = boxes_merged.copy()
+        for mb in boxes_labeled:
+            emb = helpers.embed_from_box(frame.copy(), mb)
+            if emb is None:
                 continue
+            sims = known_mat @ emb
 
-            boxes_labeled = boxes_merged.copy()
-            for mb in boxes_labeled:
-                emb = helpers.embed_from_box(frame.copy(), mb)
-                if emb is None:
-                    continue
-                sims = known_mat @ emb
+            best_idx = int(np.argmax(sims))
+            best_sim = float(sims[best_idx])
 
-                best_idx = int(np.argmax(sims))
-                best_sim = float(sims[best_idx])
+            mb["similarity"] = best_sim
+            if best_sim >= THRESHOLD:
+                mb["name"] = known_names[best_idx]
+            else:
+                mb["name"] = "Unknown"
 
-                mb["similarity"] = best_sim
-                if best_sim >= THRESHOLD:
-                    mb["name"] = known_names[best_idx]
-                else:
-                    mb["name"] = "Unknown"
-
-            labeled_faces[camera_id] = boxes_labeled
+        labeled_faces[camera_id] = boxes_labeled
 
 # Startup
 if FLAG_MULTIPLE_CAMERAS:
@@ -127,7 +127,7 @@ if FLAG_BIOMETRIC:
     known_mat /= (np.linalg.norm(known_mat, axis=1, keepdims=True) + 1e-10)
 
 
-time.sleep(1.0)  # allow cameras to warm up
+time.sleep(3.0)  # allow cameras to warm up
 
 num_cameras = camera.cameras_in_use
 if not FLAG_MULTIPLE_CAMERAS:

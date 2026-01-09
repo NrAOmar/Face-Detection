@@ -124,7 +124,7 @@ def add_boxes(frame, boxes, frame_size):
         if conf is not None:
             text = f"{name}, {conf:.2f}"
             cv2.putText(frame, text, (xmin, max(0, ymin - 8)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, color, 1)
     # Faces count
     cv2.putText(frame, f"Faces: {len(boxes)}", (10, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)

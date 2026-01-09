@@ -40,14 +40,9 @@ def _camera_thread(camera_id: int):
 
     fps_by_camera[camera_id] = fps
 
-    # Read one frame to get size
-    ret, frame = cap.read()
-    h, w = (0, 0)
-    if ret:
-        h, w = frame.shape[:2]
-        frame_sizes[camera_id] = (w, h)
-    else:
-        frame_sizes[camera_id] = None
+    w  = cap.get(cv2.CAP_PROP_FRAME_WIDTH)   # float `width`
+    h = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)  # float `height`
+    frame_sizes[camera_id] = (w, h)
 
     # Queue holds ONLY the latest frame (low latency)
     q = queue.Queue(maxsize=1)
