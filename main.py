@@ -13,12 +13,12 @@ from plot_windows import display_frames_in_grid
 # Configuration flags
 FLAG_ROTATION = True
 FLAG_HAAR = True # not tested
-FLAG_DNN = False # not tested
+FLAG_DNN = True # not tested
 FLAG_FUSION = True # not tested
 FLAG_BIOMETRIC = True
-FLAG_MULTIPLE_CAMERAS = False # TODO: change implementation to the old architecture if only 1 camera
+FLAG_MULTIPLE_CAMERAS = False
 
-ANGLE_STEP_HAAR = 20
+ANGLE_STEP_HAAR = 120
 ANGLE_STEP_DNN = 360
 MAX_KEEP_TIME = 0.5
 THRESHOLD = 0.38
@@ -62,7 +62,7 @@ def haar_worker(camera_id: int, angle: int):
         with results_lock:
             boxes_by_key[(camera_id, "haar_not_filtered", angle)] = (boxes, time.time())
             boxes_by_key[(camera_id, "haar_filtered", angle)] = (boxes_filtered, time.time())
-
+        
 
 def dnn_worker(camera_id: int, angle: int):
     while not camera.stop_flag:
@@ -196,7 +196,7 @@ try:
             cv2.putText(view_all, f"Faces: {total_faces}", (10,30),
             cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
             
-            boxes_merged = helpers.merge_boxes_with_iou(boxes_all, camera.frame_sizes.get(cam_id), 0.4, 0.5)
+            boxes_merged = helpers.merge_boxes_with_iou(boxes_all, camera.frame_sizes.get(cam_id), 0.1, 0.5)
             view_final = helpers.add_boxes(frame.copy(), boxes_merged, camera.frame_sizes.get(cam_id))
 
             if FLAG_BIOMETRIC:

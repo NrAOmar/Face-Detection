@@ -435,8 +435,7 @@ def embed_from_box(frame_bgr, box, margin=0.20):
 
     crop_luma = clahe_luma(crop_normal)
     crop112 = resize_to_112(crop_luma) # This function I use it to make a proper face recognition with out further faces wont be recognized.
-    
-   
+
     # cv2.imshow("Crop Normal", crop_normal)
     # cv2.imshow("Super Resolution", crop112)
     # cv2.waitKey(1)  # 1 ms so it doesn’t block
@@ -471,15 +470,15 @@ def dnn_filter_boxes(frame_bgr, boxes, frame_size, conf_thr):
             continue
         crop = resize_to_112(crop)
 
+        # cv2.imshow("Crop Normal", crop)
+        # cv2.waitKey(1)  # 1 ms so it doesn’t block
+
         faces, confs = dnn_detector.detect_faces(crop)
 
         # keep this Haar box only if DNN sees a face in the crop confidently
         if len(faces) > 0 and any(c >= conf_thr for c in confs):
-            # det['conf'] = confs
             # boxes = construct_boxes(faces, box[1][0], frame_size, confs)
-            # print(box[1][0])
             box_new = (box[0], (box[1][0], max(confs)))
-            # box[1] = (box[1][0], max(confs))
             boxes_confirmed.append(box_new)
         if any(c <= conf_thr for c in confs):
             print("function works")
