@@ -38,7 +38,7 @@ latest_frames = {}
 frames_lock = threading.Lock()
 starting_camera = camera.starting_camera
 
-boxes_merged = []
+boxes_merged = {}
 
 # Detection threads
 def haar_worker(camera_id: int, angle: int):
@@ -85,12 +85,12 @@ def identify_worker(camera_id: int):
     while not camera.stop_flag:
     # for cam_id in range(starting_camera, num_cameras):
         with frames_lock:
-            frame, fps = camera.get_latest_frame(cam_id)
+            frame = latest_frames.get(camera_id)
+            boxes_labeled = boxes_merged.get(camera_id)
         
-        if frame is None:
+        if frame is None or boxes_labeled is None:
             continue
 
-        boxes_labeled = boxes_merged.copy()
         for mb in boxes_labeled:
             emb = helpers.embed_from_box(frame.copy(), mb)
             if emb is None:
@@ -196,8 +196,9 @@ try:
             cv2.putText(view_all, f"Faces: {total_faces}", (10,30),
             cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
             
-            boxes_merged = helpers.merge_boxes_with_iou(boxes_all, camera.frame_sizes.get(cam_id), 0.1, 0.5)
-            view_final = helpers.add_boxes(frame.copy(), boxes_merged, camera.frame_sizes.get(cam_id))
+            with frames_lock:
+                boxes_merged[cam_id] = helpers.merge_boxes_with_iou(boxes_all, camera.frame_sizes.get(cam_id), 0.1, 0.5)
+                view_final = helpers.add_boxes(frame.copy(), boxes_merged[cam_id], camera.frame_sizes.get(cam_id))
 
             if FLAG_BIOMETRIC:
                 id_view = helpers.add_boxes(frame.copy(), labeled_faces.get(cam_id, []), camera.frame_sizes.get(cam_id))
