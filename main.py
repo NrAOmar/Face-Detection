@@ -12,15 +12,15 @@ from plot_windows import display_frames_in_grid
 
 # Configuration flags
 FLAG_ROTATION = True
-FLAG_HAAR = True # not tested
-FLAG_DNN = True # not tested
-FLAG_FUSION = True # not tested
+FLAG_HAAR = True
+FLAG_DNN = True
+FLAG_FUSION = True
 FLAG_BIOMETRIC = True
-FLAG_MULTIPLE_CAMERAS = True
+FLAG_MULTIPLE_CAMERAS = False
 
 ANGLE_STEP_HAAR = 120
 ANGLE_STEP_DNN = 360
-MAX_KEEP_TIME = 0.5
+MAX_KEEP_TIME = 1
 THRESHOLD = 0.38
 
 
