@@ -183,25 +183,28 @@ try:
             boxes_all = []
             view_all = frame.copy()
             total_faces = 0
+            frame_size = camera.frame_sizes.get(cam_id)
+
             with results_lock:
                 for (cid, model, _), (boxes, ts) in boxes_by_key.items():
                     if cid == cam_id and now - ts < MAX_KEEP_TIME:
                         if model != "haar_filtered":
-                            (view_all, num_faces) = helpers.add_boxes_all(view_all, boxes, camera.frame_sizes.get(cam_id))
+                            (view_all, num_faces) = helpers.add_boxes_all(view_all, boxes, frame_size)
                             total_faces += num_faces
 
                         if model != "haar_not_filtered":
                             boxes_all.extend(boxes)
             
+            text_size = int(np.ceil(frame_size[0] * frame_size[1] / 921600))
             cv2.putText(view_all, f"Faces: {total_faces}", (10,30),
-            cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
+            cv2.FONT_HERSHEY_SIMPLEX, 0.5*text_size, (0,0,255), text_size)
             
             with frames_lock:
-                boxes_merged[cam_id] = helpers.merge_boxes_with_iou(boxes_all, camera.frame_sizes.get(cam_id), 0.1, 0.5)
-                view_final = helpers.add_boxes(frame.copy(), boxes_merged[cam_id], camera.frame_sizes.get(cam_id))
+                boxes_merged[cam_id] = helpers.merge_boxes_with_iou(boxes_all, frame_size, 0.1, 0.5)
+                view_final = helpers.add_boxes(frame.copy(), boxes_merged[cam_id], frame_size)
 
             if FLAG_BIOMETRIC:
-                id_view = helpers.add_boxes(frame.copy(), labeled_faces.get(cam_id, []), camera.frame_sizes.get(cam_id))
+                id_view = helpers.add_boxes(frame.copy(), labeled_faces.get(cam_id, []), frame_size)
             else:
                 id_view = frame
 

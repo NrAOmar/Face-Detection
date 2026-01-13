@@ -76,7 +76,7 @@ def construct_boxes(faces, angle, frame_size, confidences=None, rotate_back=True
     return boxes
 
 def add_boxes_all(frame, boxes, frame_size):
-    text_size = round(frame_size[0] * frame_size[1] / 921600)
+    text_size = int(np.ceil(frame_size[0] * frame_size[1] / 921600))
 
     for (corners, texts) in boxes:
         # rotate corners back
@@ -91,16 +91,16 @@ def add_boxes_all(frame, boxes, frame_size):
         if texts[1] != 0.5:
             color = (255, 0, 0)
             cv2.putText(frame, f"{texts[1]}", (xmin, max(0, ymin-8)),
-                        cv2.FONT_HERSHEY_SIMPLEX, text_size, color, text_size*2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5*text_size, color, text_size)
 
         cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
         cv2.putText(frame, f"{angle} degrees", (xmin, max(0, ymin+16)),
-                    cv2.FONT_HERSHEY_SIMPLEX, text_size, color, text_size*2)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5*text_size, color, text_size)
 
     return (frame, len(boxes))
 
 def add_boxes(frame, boxes, frame_size):
-    text_size = round(frame_size[0] * frame_size[1] / 921600)
+    text_size = int(np.ceil(frame_size[0] * frame_size[1] / 921600))
 
     for b in boxes:
         x1 = b["x1"]
@@ -128,10 +128,10 @@ def add_boxes(frame, boxes, frame_size):
         if conf is not None:
             text = f"{name}, {conf:.2f}"
             cv2.putText(frame, text, (xmin, max(0, ymin - 8)),
-                        cv2.FONT_HERSHEY_SIMPLEX, text_size, color, text_size*2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5*text_size, color, text_size)
     # Faces count
     cv2.putText(frame, f"Faces: {len(boxes)}", (10, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, text_size, (0, 0, 255), text_size*2)
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5*text_size, (0, 0, 255), text_size)
 
     return frame
 

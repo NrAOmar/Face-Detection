@@ -27,7 +27,7 @@ frame_sizes = {}
 def _camera_thread(camera_id: int):
     global cameras_in_use
 
-    cap = cv2.VideoCapture(camera_id, cv2.CAP_AVFOUNDATION)
+    cap = cv2.VideoCapture(camera_id)
     if not cap.isOpened():
         cameras_in_use -= 1
         print(f"[Camera {camera_id}] ERROR: Could not open camera")
