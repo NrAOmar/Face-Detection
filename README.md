@@ -1,37 +1,36 @@
 # CRV_Face_Detection
 
 ## TODO
-- ✅ add plotting function that plots in a grid
-- ✅ use 2 cameras together
-- ✅ add flags that allow us to disable all of these features/improvements like the prof
+- ✅ add flags that allow us to disable all of these features/improvements like the Professor
     - ✅ flag for tilting
-    - ✅ flag for which model to use HAAR/DNN/BOTH and the fusion
-    - ✅ flag for biometric
-    - flag for *"low pass filter"*
-- add tilting
-    - ✅ rotate 15 degree => 24 images per frame
+    - ✅ flag for which model to use HAAR/DNN
+    - ✅ flag for model fusion
+    - ✅ flag for face recognition (biometric)
+    - ✅ flag for multiple cameras
+
+- ✅ add tilting
+    - ✅ rotate 15 degrees => 24 images per frame
     - ✅ get the conrer points of the box
     - ✅ map this center point using the inverse rotation matrix
     - ✅ draw the new box
     - ✅ Combine all boxes
-    - ❌ Fix the problem with the pixelated image
+    - ✅ Fix the problem with the pixelated image
     - ✅ Use multiple threads for operations to reduce delay 
     - ✅ Use image without cropping. 
-- fuse both algorithms for faraway faces
-    Options:
-    - ✅ use DNN for 1 angle only: only work for **very** close faces
-    - use DNN for all angles: more threads required (slower)
-- add biometrics
-    - ✅ change to only add the name to current boxes instead of adding new boxes
-    - ✅ use 1 worker for each name
-- adjust text size to depend on frame size
 
-- fix writing to .mp4 file
-- add low pass filter for faces
-    - will introduce a delay when detecting faces
+- ✅ use DNN for 1 or 2 angles only instead of many angles like HAAR
+    - this is done to reduce redundant computations
+    - although this will only detect rotated faces for **very** close faces
+
+- ✅ fuse both algorithms for faraway faces
+- ✅ add biometrics
+- ✅ add plotting function that plots in a grid
+- ✅ use multiple cameras together
+- ✅ adjust text size to depend on frame size
 
 
-## Python environment
+## Python environment setup
+- only works for old python versions like python 3.10.0 or python 3.9.6
 - python3 -m venv .venv
 - source .venv/bin/activate
 - pip install -r requirements.txt
