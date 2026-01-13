@@ -468,7 +468,8 @@ def dnn_filter_boxes(frame_bgr, boxes, frame_size, conf_thr):
         crop = frame_bgr[y1c:y2c, x1c:x2c]
         if crop.size == 0:
             continue
-        crop = resize_to_112(crop)
+        crop_luma = clahe_luma(crop)
+        crop = resize_to_112(crop_luma)
 
         # cv2.imshow("Crop Normal", crop)
         # cv2.waitKey(1)  # 1 ms so it doesn’t block
