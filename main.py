@@ -134,6 +134,9 @@ if not FLAG_MULTIPLE_CAMERAS:
     starting_camera = camera.starting_camera
     num_cameras = starting_camera + 1
 
+    ANGLE_STEP_HAAR = 20
+    ANGLE_STEP_DNN = 90
+
 angles_haar = [0] if not FLAG_ROTATION else list(range(0, 360, ANGLE_STEP_HAAR))
 angles_dnn  = [0] if not FLAG_ROTATION else list(range(0, 360, ANGLE_STEP_DNN))
 
@@ -197,7 +200,7 @@ try:
             
             text_size = int(np.ceil(frame_size[0] * frame_size[1] / 921600))
             cv2.putText(view_all, f"Faces: {total_faces}", (10,30),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.5*text_size, (0,0,255), text_size)
+            cv2.FONT_HERSHEY_SIMPLEX, text_size, (0,0,255), 2*text_size)
             
             with frames_lock:
                 boxes_merged[cam_id] = helpers.merge_boxes_with_iou(boxes_all, frame_size, 0.1, 0.5)
