@@ -15,15 +15,15 @@
     - ✅ draw the new box
     - ✅ Combine all boxes
     - ❌ Fix the problem with the pixelated image
-    - ❌ Use multiple threads for operations to reduce delay 
+    - ✅ Use multiple threads for operations to reduce delay 
     - ✅ Use image without cropping. 
 - fuse both algorithms for faraway faces
     Options:
-    - use DNN for 1 angle only: only work for **very** close faces
+    - ✅ use DNN for 1 angle only: only work for **very** close faces
     - use DNN for all angles: more threads required (slower)
 - add biometrics
-    - change to only add the name to current boxes instead of adding new boxes
-    - use 1 worker for each name
+    - ✅ change to only add the name to current boxes instead of adding new boxes
+    - ✅ use 1 worker for each name
 - adjust text size to depend on frame size
 
 - fix writing to .mp4 file
