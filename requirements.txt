@@ -5,3 +5,9 @@ matplotlib
 notebook
 jupyter
 ipympl
+numba
+screeninfo
+mediapipe==0.10.21
+insightface
+onnxruntime
+# realesrgan
